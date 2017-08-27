@@ -1,0 +1,183 @@
+
+<!doctype html>
+
+<html lang='en'>
+<meta charset='utf-8'>
+<title>Parquet Deformation: I at the Center</title>
+<meta content='D3 parquet deformation experiment one, using David Oleson&apos;s "I at the Center"' name='description'>
+<style>
+  
+  #inprogress {
+    display: none;
+    position: absolute;
+    top: 200px;
+    left: 300px;
+    font-size: 40px;
+  }
+
+</style>
+<body>
+  <div id='inprogress'>
+    Building...
+  </div>
+  
+  <svg>
+    <g id='drawing'>
+    </g>
+  </svg>
+  
+  <script src='http://d3js.org/d3.v4.min.js'></script>
+  <script src='https://d3js.org/d3-array.v1.min.js'></script>
+  <script src='https://d3js.org/d3-shape.v1.min.js'></script>
+
+  <script>
+    /*
+    ....... 1*3+4 grid squares
+    .......
+    .*...*.
+    .**O**.
+    .*...*.
+    .......
+    .......
+
+    .......... 2*3+4 grid squares
+    .....###..
+    .*...*#...
+    .**O**0...
+    .*###*#...
+    ...#*###*.
+    ...0**O**.
+    ...#*...*.
+    ..###.....
+    ..........
+    */
+
+
+    var svg, drawing;
+    shouldRedraw = true, smooving=-1;
+
+    var nw = 17, nh = 17, nc = [(nw-1)/2, (nh-1)/2];
+    var width = 825, height = width/nw*nh, center = [width/2, height/2];
+    var tileWidth = nw*3+4, tileHeight = nh*3+4, unit = width/tileWidth;
+	
+    var rotate = 2, theta = 0, rotVec = [1,0]
+	
+    var eyeElements;
+    var allEyesOnMe = d3.cross(d3.range(nw), d3.range(nh), (a, b) => 
+      ({
+        nx: (a-nc[0]),
+        ny: (b-nc[1]),
+        xy: [(a-nc[0])*3*unit, (b-nc[1])*3*unit],
+        r: (a+b)%2 == 1
+      }));
+    var eyeGenerator = d3.area()
+      .x0(d => d[0])
+      //.x1(d => d[1]*unit)
+      .y0(d => d[1])
+      .y1(d => d[2])
+
+    var mousencoords = [0,0]
+
+    lastTime=0
+
+    var defaultEye = [
+      [-5,   0,   0],
+      [-5,  -3,   3],
+      [-4,  -3,   3],
+      [-3,  -3,   3],
+      [-3,  -2,   2],
+      [-3,  -1,   1],
+      [ 0,  -1,   1],
+      [ 3,  -1,   1],
+      [ 3,  -2,   2],
+      [ 3,  -3,   3],
+      [ 4,  -3,   3],
+      [ 5,  -3,   3],
+      [ 5,   0,   0],
+    ]
+    defaultEye = defaultEye.map(v => [
+        v[0]/2*unit,
+        v[1]/2*unit,
+        v[2]/2*unit,
+    ])
+
+    init();
+	
+    d3.interval(function(dt) {
+      //console.log(dt)
+      if (rotate) {
+        theta += 0.05
+        rotVec = [Math.cos(theta),Math.sin(theta)]
+        let orthogonality = rotVec[0]*rotVec[1]/2+1.25
+      }
+      if (shouldRedraw || rotate) {
+        eyeElements.attr('d', d => eyeGenerator(eyeShape(d)))
+        shouldRedraw = false
+      }
+    });
+
+    function init() {
+      svg = d3.select('svg')
+        .attr('width', width)
+        .attr('height', height);
+
+      drawing = d3.select('#drawing')
+        .attr('transform', 'translate('+center+')');
+      
+      eyeElements = drawing.selectAll('path')
+        .data(allEyesOnMe).enter().append('path')
+        .attr('class', 'eye')
+        .attr('stroke', '#832')
+        .attr('fill', d => d.r ? '#e95':'#c74')
+        .attr('stroke-width', 2)
+        .attr('transform', d =>  (d.r ? ' rotate(90 '+d.xy+')':'') + 'translate('+d.xy+')')
+        .attr('d', d => eyeGenerator(eyeShape(d)));
+
+      drawing.on('touchmove mousemove', moved)
+      	.on('mouseout', exited)
+      	.on('click', clicked)
+        .on('enter', entered);
+    }
+    
+    function eyeShape(d) {
+      var xtemp = 0.5*(d.nx-mousencoords[0])/nw*unit, ytemp = 0.5*(d.ny-mousencoords[1])/nh*unit
+      xt = xtemp*rotVec[0]-ytemp*rotVec[1]
+      yt = xtemp*rotVec[1]+ytemp*rotVec[0]
+      var res = defaultEye.slice()
+      res[0] = res[0].slice(); res[0][0]+=xt
+      res[2] = res[2].slice(); res[2][1]+=yt
+      res[2] = res[2].slice(); res[2][2]-=yt
+      res[4] = res[4].slice(); res[4][0]+=yt
+      res[6] = res[6].slice(); res[6][1]-=xt
+      res[6] = res[6].slice(); res[6][2]+=xt
+      res[8] = res[8].slice(); res[8][0]-=yt
+      res[10] = res[10].slice(); res[10][1]+=yt
+      res[10] = res[10].slice(); res[10][2]-=yt
+      res[12] = res[12].slice(); res[12][0]-=xt
+      return res
+    }
+
+    function moved() {
+      if (smooving < 0) {
+        var crd = d3.mouse(this)
+        mousencoords = [crd[0]/width*nw, crd[1]/height*nh]
+        shouldRedraw = true
+      }
+    }
+    
+    function exited() {
+      mousencoords = [0,0]
+      console.log('yo!')
+    }
+
+    function entered() {
+    }
+    
+    function clicked() {
+      rotate = !rotate
+    }
+
+    
+  </script>
+</body>
+</html>
