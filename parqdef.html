@@ -1,0 +1,185 @@
+
+<!doctype html>
+
+<html lang='en'>
+<meta charset='utf-8'>
+<title>Parquet Deformation: I at the Center</title>
+<meta content='D3 parquet deformation experiment one, using David Oleson&apos;s "I at the Center"' name='description'>
+<style>
+  
+  #inprogress {
+    display: none;
+    position: absolute;
+    top: 200px;
+    left: 300px;
+    font-size: 40px;
+  }
+
+</style>
+<body>
+  <div id='inprogress'>
+    Building...
+  </div>
+  
+  <svg>
+    <g id='drawing'>
+    </g>
+  </svg>
+  
+  <script src='http://d3js.org/d3.v4.min.js'></script>
+  <script src='https://d3js.org/d3-array.v1.min.js'></script>
+  <script src='https://d3js.org/d3-shape.v1.min.js'></script>
+
+  <script>
+    var svg, drawing
+    shouldRedraw = true
+	
+    var nw = 17, nh = 5, nc = [(nw-1)/2, (nh-1)/2];
+    var width = 600, height = width/nw*nh, center = [width/2, height/2];
+    var scale = width/nw
+  
+    var parqElements
+    var parqLocs = d3.cross(d3.range(nw), d3.range(nh), (a, b) => 
+      ({
+        nx: (a-nc[0]),
+        ny: (b-nc[1]),
+      }));
+
+    var mousencoords = [0,0]
+    
+    var paper = 'p1', lattice='rectangular'
+    
+    function ident(val) {return val}
+    function one(val) {return 1}
+    
+    var wallpapers = {
+      p1: {
+        square: {
+          cpoint: {x:1, y:1},
+          cmove: {x:one, y:one},
+          anchors: function() {c = this.cpoint; return [{x:0, y:0}, {x:1, y:0}, c, {x:0, y:1}]},
+          tfs: ['translate(1,0)', 'translate(0,1)'],
+          progtfs: [0],
+          duptf: 1,
+          edges: [
+            {a: 1, b: 2, tfs: ['translate(-1,0)']},
+            {a: 2, b: 3, tfs: ['translate(0,-1)']},
+          ]
+        },
+        rectangular: {
+          cpoint: {x:1, y:1},
+          cmove: {x:one, y:ident},
+          anchors: function() {c = this.cpoint; return [{x:0, y:0}, {x:1, y:0}, c, {x:0, y:c.y}]},
+          tfs: ['translate(1,0)', 'translate(0,y)'],
+          progtfs: [0],
+          duptf: 1,
+          edges: [
+            {a: 1, b: 2, tfs: ['translate(-1,0)']},
+            {a: 2, b: 3, tfs: ['translate(0,-y)']},
+          ]
+        },
+        oblique: {
+          cpoint: {x:1, y:1},
+          cmove: {x:ident, y:ident},
+          anchors: function() {c = this.cpoint; return [{x:0, y:0}, {x:1, y:0}, c, {x:c.x-1, y:c.y}]},
+          tfs: ['translate(x,0)', 'translate(x-1,y)'],
+          progtfs: [0],
+          duptf: 1,
+          edges: [
+            {a: 1, b: 2, tfs: ['translate(-1,0)']},
+            {a: 2, b: 3, tfs: ['translate(1-x,-y)']},
+          ]
+        },
+        rhombic: {
+          cpoint: {x:0.5, y:0.5},
+          cmove: {x:val=>0.5, y:ident},
+          anchors: function() {c = this.cpoint; return [{x:0, y:0},{x:0.5, y:c.y},{x:1,y:0},{x:0.5, y:-c.y}]},
+          tfs: ['translate(0.5,y)','translate(0.5,0)', 'translate(0,y*2)'],
+          progtfs: [0,1],
+          duptf: 2,
+          edges: [
+            {a: 1, b: 2, tfs: ['translate(-0.5,-y)']},
+            {a: 2, b: 3, tfs: ['translate(-0.5,y)']},
+          ]
+        },
+      },
+    }
+
+    init();
+    
+    d3.interval(function(dt) {
+      if (shouldRedraw) {
+        parqElements.attr('d', d => parqGenerator(parqShape(d)))
+        shouldRedraw = false
+      }
+    });
+
+    function init() {
+      svg = d3.select('svg')
+        .attr('width', width)
+        .attr('height', height)
+
+      drawing = d3.select('#drawing')
+        .attr('transform', 'scale('+scale+') translate('+center+')')
+        
+      parqElements = drawing.selectAll('path')
+        .data(allparqsOnMe).enter().append('path')
+        .attr('class', 'parq')
+        .attr('stroke', '#832')
+        
+    }
+    function oldinit() {
+      svg = d3.select('svg')
+        .attr('width', width)
+        .attr('height', height);
+
+      drawing = d3.select('#drawing')
+        .attr('transform', 'translate('+center+')');
+      
+      parqElements = drawing.selectAll('path')
+        .data(allparqsOnMe).enter().append('path')
+        .attr('class', 'parq')
+        .attr('stroke', '#832')
+        .attr('fill', d => d.r ? '#e95':'#c74')
+        .attr('stroke-width', 2)
+        .attr('transform', d =>  (d.r ? ' rotate(90 '+d.xy+')':'') + 'translate('+d.xy+')')
+        .attr('d', d => parqGenerator(parqShape(d)));
+
+      drawing.on('touchmove mousemove', moved)
+      	.on('mouseout', exited)
+      	.on('click', clicked)
+        .on('enter', entered);
+    }
+    
+    function parqShape(d) {
+      var xtemp = 0.5*(d.nx-mousencoords[0])/nw*unit, ytemp = 0.5*(d.ny-mousencoords[1])/nh*unit
+      xt = xtemp*rotVec[0]-ytemp*rotVec[1]
+      yt = xtemp*rotVec[1]+ytemp*rotVec[0]
+      var res = defaultparq.slice()
+      return res
+    }
+
+    function moved() {
+      if (smooving < 0) {
+        var crd = d3.mouse(this)
+        mousencoords = [crd[0]/width*nw, crd[1]/height*nh]
+        shouldRedraw = true
+      }
+    }
+    
+    function exited() {
+      mousencoords = [0,0]
+      console.log('yo!')
+    }
+
+    function entered() {
+    }
+    
+    function clicked() {
+      rotate = !rotate
+    }
+
+    
+  </script>
+</body>
+</html>
