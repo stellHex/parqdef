@@ -4,7 +4,7 @@
 <html lang='en'>
 <meta charset='utf-8'>
 <title>Parquet Deformation: I at the Center</title>
-<meta content='D3 parquet deformation experiment one, using David Oleson&apos;s "I at the Center"' name='description'>
+<meta content='D3 parquet deformation creator.' name='description'>
 <style>
   
   #inprogress {
@@ -29,43 +29,40 @@
   <script src='http://d3js.org/d3.v4.min.js'></script>
   <script src='https://d3js.org/d3-array.v1.min.js'></script>
   <script src='https://d3js.org/d3-shape.v1.min.js'></script>
+  <script src="https://d3js.org/d3-interpolate.v1.min.js"></script>
 
   <script>
-    var svg, drawing
-    shouldRedraw = true
+    var svg, drawing // should be defined by init
+    var shouldRedraw = true
 	
-    var nw = 17, nh = 5, nc = [(nw-1)/2, (nh-1)/2];
-    var width = 600, height = width/nw*nh, center = [width/2, height/2];
-    var scale = width/nw
+    var nw = 17, nh = 5
+    var border = 50
+    var width = 1200, scale = (width-border*2)/nw, height = scale*nh + border*2, center = [width/2, height/2];
+    
   
-    var parqElements
     var parqLocs = d3.cross(d3.range(nw), d3.range(nh), (a, b) => 
       ({
-        nx: (a-nc[0]),
-        ny: (b-nc[1]),
+        nx: a,
+        ny: b
       }));
+    var edgeHelper = d3.line()
 
-    var mousencoords = [0,0]
-    
-    var paper = 'p1', lattice='rectangular'
-    
-    function ident(val) {return val}
-    function one(val) {return 1}
-    
-    var wallpapers = {
+    var parqData, prototiles // should be defined by restart
+    var edgeGenerator, parqElements, edgeElements // should be defined by rerender
+
+    const wallpapers = {
       p1: {
-        square: {
-          cpoint: {x:1, y:1},
-          cmove: {x:one, y:one},
-          anchors: function() {c = this.cpoint; return [{x:0, y:0}, {x:1, y:0}, c, {x:0, y:1}]},
-          tfs: ['translate(1,0)', 'translate(0,1)'],
-          progtfs: [0],
-          duptf: 1,
-          edges: [
-            {a: 1, b: 2, tfs: ['translate(-1,0)']},
-            {a: 2, b: 3, tfs: ['translate(0,-1)']},
-          ]
-        },
+        square: function() {
+          this.cpoint = [1, 1], // control point
+          this.cmove = (x,y) => [1, 1], // if cpoint is dragged to x,y, return this
+          this.anchors =  () => [[0, 0], [1, 0], this.cpoint, [0, 1]], // corners
+          this.edges = [
+            {start: 1, end: 2}, // indices of tile.anchors; middle is index of tile.edges
+            {start: 2, end: 3}
+          ],
+          this.edgeTfs = () => [['','translate(-1,0)'],['','translate(0,-1)']],
+          this.tf = d => `translate(${d.nx},${d.ny})`
+        },/*
         rectangular: {
           cpoint: {x:1, y:1},
           cmove: {x:one, y:ident},
@@ -101,15 +98,21 @@
             {a: 1, b: 2, tfs: ['translate(-0.5,-y)']},
             {a: 2, b: 3, tfs: ['translate(-0.5,y)']},
           ]
-        },
+        },*/
       },
     }
 
-    init();
+    var wallpaper = new wallpapers['p1']['square']()
+
+    init()
     
+    prototiles[0].edges = [[[1.25, 0.3]], [[0.3, 1.25]]]
+    prototiles[1].edges = [[[0.75, 0.7]], [[0.7, 0.75]]]
+    rerender()
+
     d3.interval(function(dt) {
       if (shouldRedraw) {
-        parqElements.attr('d', d => parqGenerator(parqShape(d)))
+        edgeElements.attr('d', d => d.data)
         shouldRedraw = false
       }
     });
@@ -120,14 +123,66 @@
         .attr('height', height)
 
       drawing = d3.select('#drawing')
-        .attr('transform', 'scale('+scale+') translate('+center+')')
-        
-      parqElements = drawing.selectAll('path')
-        .data(allparqsOnMe).enter().append('path')
-        .attr('class', 'parq')
-        .attr('stroke', '#832')
-        
+        .attr('transform', `translate(${border},${border}) scale(${scale})`)
+      
+      restart()
     }
+
+    function restart() {
+      prototiles = [new tile(), new tile()]
+      parqData = parqLocs.map(xy => ({
+        nx: xy.nx,
+        ny: xy.ny
+      }))
+      rerender()
+    }
+
+    function rerender() {
+      edgeGenerator = edgeGeneratorFactory()
+      if (parqElements) parqElements.remove()
+      parqElements = drawing.selectAll('g')
+        .data(parqLocs).enter().append('g')
+        .attr('class', 'parq')
+        .attr('transform', wallpaper.tf)
+      let edgeTfs = wallpaper.edgeTfs()
+      edgeElements = parqElements.selectAll('path')
+        .data(loc => {
+          let result = []
+          let edges = edgeGenerator(loc.nx/(nw-1)).map(edgeHelper)
+          for (let i=0; i<wallpaper.edges.length; i++) {
+            for (let j=0; j<edgeTfs[i].length; j++) {
+              result.push({
+                tf: edgeTfs[i][j],
+                data: edges[i]
+              })
+            }
+          }
+          return result
+        }).enter().append('path')
+        .attr('stroke', 'black')
+        .attr('stroke-width', 0.05)
+        .attr('transform', d => d.tf)
+        .attr('d', d => d.data)
+        .attr('fill', 'none')
+    }
+
+    function tile(edges) {
+      this.cpoint = wallpaper.cpoint
+      this.anchors = wallpaper.anchors()
+      this.edges = edges || Array.from({length: wallpaper.edges.length}, () => [])
+      this.fullEdges = function() {
+        result = []
+        for (let i=0; i<wallpaper.edges.length;i++) {
+          result.push([this.anchors[wallpaper.edges[i].start]].concat(this.edges[i], [this.anchors[wallpaper.edges[i].end]]))
+        }
+        return result
+      }
+    }
+
+    function edgeGeneratorFactory() {
+      return d3.piecewise(d3.interpolate, prototiles.map(t => t.fullEdges()))
+    }
+
     function oldinit() {
       svg = d3.select('svg')
         .attr('width', width)
@@ -150,14 +205,6 @@
       	.on('click', clicked)
         .on('enter', entered);
     }
-    
-    function parqShape(d) {
-      var xtemp = 0.5*(d.nx-mousencoords[0])/nw*unit, ytemp = 0.5*(d.ny-mousencoords[1])/nh*unit
-      xt = xtemp*rotVec[0]-ytemp*rotVec[1]
-      yt = xtemp*rotVec[1]+ytemp*rotVec[0]
-      var res = defaultparq.slice()
-      return res
-    }
 
     function moved() {
       if (smooving < 0) {
@@ -165,11 +212,6 @@
         mousencoords = [crd[0]/width*nw, crd[1]/height*nh]
         shouldRedraw = true
       }
-    }
-    
-    function exited() {
-      mousencoords = [0,0]
-      console.log('yo!')
     }
 
     function entered() {
