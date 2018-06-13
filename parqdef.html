@@ -34,80 +34,150 @@
   <script>
     var svg, drawing // should be defined by init
     var shouldRedraw = true
-	
-    var nw = 17, nh = 5
+  
+    var nw = 23, nh = 11
     var border = 50
-    var width = 1200, scale = (width-border*2)/nw, height = scale*nh + border*2, center = [width/2, height/2];
+    var width = 1200, scale = (width - border*2)/(1.5*nw), height = scale*nh + border*2, center = [width/2, height/2];
     
   
-    var parqLocs = d3.cross(d3.range(nw), d3.range(nh), (a, b) => 
-      ({
-        nx: a,
-        ny: b
-      }));
     var edgeHelper = d3.line()
 
-    var parqData, prototiles // should be defined by restart
-    var edgeGenerator, parqElements, edgeElements // should be defined by rerender
+    var prototiles // defined by restart
+    var parqLocs // defined by reparameterize
+    var edgeGenerator, parqElements, edgeElements // defined by rerender
 
+    const archetype = {
+      square: {
+
+      }
+    }
+    // note: inconsistent use of arrow functions and `function()` functions, because I don't like using `function()` functions
+    // in compact definitions like this, but they're neccesary because `this` can't be rebound on arrow functions
     const wallpapers = {
       p1: {
         square: function() {
-          this.cpoint = [1, 1], // control point
-          this.cmove = (x,y) => [1, 1], // if cpoint is dragged to x,y, return this
-          this.anchors =  () => [[0, 0], [1, 0], this.cpoint, [0, 1]], // corners
-          this.edges = [
-            {start: 1, end: 2}, // indices of tile.anchors; middle is index of tile.edges
-            {start: 2, end: 3}
-          ],
-          this.edgeTfs = () => [['','translate(-1,0)'],['','translate(0,-1)']],
-          this.tf = d => `translate(${d.nx},${d.ny})`
-        },/*
-        rectangular: {
-          cpoint: {x:1, y:1},
-          cmove: {x:one, y:ident},
-          anchors: function() {c = this.cpoint; return [{x:0, y:0}, {x:1, y:0}, c, {x:0, y:c.y}]},
-          tfs: ['translate(1,0)', 'translate(0,y)'],
-          progtfs: [0],
-          duptf: 1,
-          edges: [
-            {a: 1, b: 2, tfs: ['translate(-1,0)']},
-            {a: 2, b: 3, tfs: ['translate(0,-y)']},
+          this.cpoint = [1, 1] // control point. in the future may be variable between tiles
+          this.cmove = (x,y) => [1, 1] // how the cpoint changes if it is dragged to x,y
+          this.anchors = function () {[[0, 0], [1, 0], this.cpoint, [0, 1]]} // corners
+          this.edgeEnds = [
+            [1, 2], // values are indices of this.anchors
+            [2, 3]  // if variable cpoints implemented, will instead be indices of tile.anchors
           ]
+          this.edgeTfs = () => [['', 'translate(-1 0)'], ['', 'translate(0 -1)']]
+          this.tf = d => `translate(${d.nx} ${d.ny})`
         },
-        oblique: {
-          cpoint: {x:1, y:1},
-          cmove: {x:ident, y:ident},
-          anchors: function() {c = this.cpoint; return [{x:0, y:0}, {x:1, y:0}, c, {x:c.x-1, y:c.y}]},
-          tfs: ['translate(x,0)', 'translate(x-1,y)'],
-          progtfs: [0],
-          duptf: 1,
-          edges: [
-            {a: 1, b: 2, tfs: ['translate(-1,0)']},
-            {a: 2, b: 3, tfs: ['translate(1-x,-y)']},
-          ]
+        rectangular: function() {
+          Object.assign(this, new wallpapers.p1.square())
+          this.cmove = (x,y) => [x,1]
+          this.anchors =  function () {return [[0, 0], [this.cpoint[0], 0], this.cpoint, [0, 1]]}
+          this.edgeTfs = () => [['', `translate(-${this.cpoint[0]} 0)`], ['', 'translate(0 -1)']]
+          this.tf = d => `translate(${this.cpoint[0]*d.nx} ${d.ny})`
         },
-        rhombic: {
-          cpoint: {x:0.5, y:0.5},
-          cmove: {x:val=>0.5, y:ident},
-          anchors: function() {c = this.cpoint; return [{x:0, y:0},{x:0.5, y:c.y},{x:1,y:0},{x:0.5, y:-c.y}]},
-          tfs: ['translate(0.5,y)','translate(0.5,0)', 'translate(0,y*2)'],
-          progtfs: [0,1],
-          duptf: 2,
-          edges: [
-            {a: 1, b: 2, tfs: ['translate(-0.5,-y)']},
-            {a: 2, b: 3, tfs: ['translate(-0.5,y)']},
-          ]
-        },*/
+        oblique: function() {
+          Object.assign(this, new wallpapers.p1.square())
+          this.cmove = (x,y) => [x,y]
+          this.anchors =  () => [[0, 0], [1, 0], this.cpoint, [this.cpoint[0]-1, this.cpoint[1]]]
+          this.edgeTfs = () => [['', 'translate(-1 0)'], ['', `translate(${1-this.cpoint[0]} -${this.cpoint[1]})`]]
+          this.tf = d => `translate(${d.nx + (this.cpoint[0]%1)*d.ny} ${this.cpoint[1] * d.ny})`
+        },
+        hexagonal: function() {
+          this.cpoint = [Math.sqrt(3), 0.5]
+          this.cmove = (x,y) => [this.cpoint[0],0.5] // faster than calc'ing sqrt(3) again
+          this.anchors =  () => [[0, 0.5], [this.cpoint[0]/2, 0], this.cpoint, [this.cpoint[0]/2, 1]]
+          this.edgeEnds = [[1, 2], [2, 3]],
+          this.edgeTfs = () => [['',`translate(-${this.cpoint[0]/2} 0.5)`],['',`translate(-${this.cpoint[0]/2} -0.5)`]]
+          this.tf = d => `translate(${d.nx*this.cpoint[0]/2} ${d.ny + (d.nx%2)/2})`
+        },
+        rhombic: function() {
+          Object.assign(this, new wallpapers.p1.hexagonal())
+          this.cmove = (x,y) => [x,0.5]
+        }
       },
+      p2: {
+        square: function() {
+          this.cpoint = [1,1]
+          this.cmove = (x,y) => [1,1]
+          this.anchors = () => [[0, 0], [0.5, 0], [1, 0], [1, 0.5], [1, 1], [0.5, 1], [0, 1], [0, 0.5]]
+          this.edgeEnds = [[0,1],[2,3],[4,5],[6,7]]
+          this.edgeTfs = function () {a = this.anchors(); return Array.from({length:4}, (e,i) => ['', `rotate(180 ${a[i*2+1]})`])}
+          this.tf = d => `translate(${d.nx} ${d.ny}) rotate(${(d.nx+d.ny)%2 * 180} 0.5 0.5)`
+        },
+        rectangular: function() {
+          Object.assign(this, new wallpapers.p2.square())
+          this.cmove = (x,y) => [x,1]
+          this.anchors = () => {let x=this.cpoint[0]; return [[0, 0], [x/2, 0], [x, 0], [x, 0.5], [x, 1], [x/2, 1], [0, 1], [0, 0.5]]}
+          this.tf = d => `translate(${d.nx*this.cpoint[0]} ${d.ny}) rotate(${(d.nx+d.ny)%2 * 180} ${this.cpoint[0]/2} 0.5)`
+        },
+        oblique: function() {
+          Object.assign(this, new wallpapers.p2.square())
+          this.cmove = (x,y) => [x,y]
+          this.anchors = () => {let x=this.cpoint[0]; let y=this.cpoint[1];
+            return [[0, 0], [0.5, 0], [1, 0], [x/2+0.5, y/2], [x, y], [x-0.5, y], [x-1, y], [(x-1)/2, y/2]]}
+          this.tf = d => {let x=this.cpoint[0]; let y=this.cpoint[1];
+            return `translate(${d.nx + (x%1)*d.ny} ${y*d.ny}) rotate(${(d.nx+d.ny)%2 * 180} ${x/2} ${y/2})`}
+        },
+        hexagonal: function() {
+          this.cpoint = [Math.sqrt(3), 0.5]
+          this.cmove = (x,y) => [this.cpoint[0],0.5]
+          this.anchors = function() {let x=this.cpoint[0];
+            return [[0, 0.5], [x*0.25, 0.25], [x*0.5, 0], [x*0.75, 0.25], [x, 0.5], [x*0.75, 0.75], [x*0.5, 1], [x*0.25, 0.75]]}
+          this.edgeEnds = [[0,1],[2,3],[4,5],[6,7]]
+          this.edgeTfs = function() {a = this.anchors(); return Array.from({length:4}, (e,i) => ['', `rotate(180 ${a[i*2+1]})`])}
+          this.tf = function(d) {return 
+            `translate(${d.nx*this.cpoint[0]/2} ${d.ny + (d.nx%2)/2}) rotate(${d.nx%2 * 180} ${this.cpoint[0]/2} 0.5)`}
+        },
+        rhombic: function() {
+          Object.assign(this, new wallpapers.p2.hexagonal())
+          this.cmove = (x,y) => [x,0.5]
+        }
+      },
+      pm: {},
+      pg: {
+        square_a: function() {
+          Object.assign(this, new wallpapers.p1.square())
+          this.edgeTfs = () => [['', 'translate(-1 1) scale(1 -1)'], ['', 'translate(0 -1)']],
+          this.tf = d => `translate(${d.nx} ${d.ny+d.nx%2}) ${d.nx%2?'scale(1 -1)':''}`
+        },
+        square_b: function() {
+          Object.assign(this, new wallpapers.p1.square())
+          this.edgeTfs = () => [['', 'translate(-1 0)'], ['', 'translate(1 -1) scale(-1 1)']],
+          this.tf = d => `translate(${d.nx+d.ny%2} ${d.ny}) ${d.ny%2?'scale(-1 1)':''}`
+        },
+        rectangular_a: function() {
+          Object.assign(this, new wallpapers.p1.rectangular())
+          this.edgeTfs = () => [['', `translate(-${this.cpoint[0]} 1) scale(1 -1)`], ['', 'translate(0 -1)']],
+          this.tf = d => `translate(${this.cpoint[0]*d.nx} ${d.ny+d.nx%2}) ${d.nx%2?'scale(1 -1)':''}`
+        },
+        rectangular_b: function() {
+          Object.assign(this, new wallpapers.p1.rectangular())
+          this.edgeTfs = () => [['', `translate(-${this.cpoint[0]} 0)`], ['', `translate(${this.cpoint[0]} -1) scale(-1 1)`]],
+          this.tf = d => `translate(${this.cpoint[0]*(d.nx+d.ny%2)} ${d.ny}) ${d.ny%2?'scale(-1 1)':''}`
+        },
+      },
+      cm: {}, pmm: {},
+      pmg: {
+
+      }
+
+      p6: {
+        hexagonal_a(): {} // 1 edge with 12 tfs (hexagon)
+        hexagonal_b(): {} // 1 edge with 6 tfs (triangle)
+        hexagonal_c(): {} // 1 edge with 4 tfs (rhombus)
+      },
+      p6m: {}
     }
 
-    var wallpaper = new wallpapers['p1']['square']()
+    var wallpaper = new wallpapers.pg.rectangular_a()
+    wallpaper.cpoint = [1.5,1]
 
     init()
     
-    prototiles[0].edges = [[[1.25, 0.3]], [[0.3, 1.25]]]
-    prototiles[1].edges = [[[0.75, 0.7]], [[0.7, 0.75]]]
+    // p1.rhombic
+    // prototiles[0].edges = [[[Math.sqrt(3)/2, 0.5]], [[Math.sqrt(3)/2, 0.5]]]
+    // prototiles[1].edges = [[[Math.sqrt(3),0]], [[Math.sqrt(3), 1]]]
+    // p2.square
+    prototiles[0].edges[0] = [[1.25,0]]
+    prototiles[1].edges[0] = [[1.25,1]]
     rerender()
 
     d3.interval(function(dt) {
@@ -130,14 +200,19 @@
 
     function restart() {
       prototiles = [new tile(), new tile()]
-      parqData = parqLocs.map(xy => ({
-        nx: xy.nx,
-        ny: xy.ny
+      reparameterize()
+    }
+
+    function reparameterize() {
+      parqLocs = d3.cross(d3.range(nw), d3.range(nh), (a, b) => 
+      ({
+        nx: a,
+        ny: b
       }))
       rerender()
     }
 
-    function rerender() {
+    function rerender() { //inefficient -- don't need to recreate all elements every time
       edgeGenerator = edgeGeneratorFactory()
       if (parqElements) parqElements.remove()
       parqElements = drawing.selectAll('g')
@@ -148,8 +223,9 @@
       edgeElements = parqElements.selectAll('path')
         .data(loc => {
           let result = []
-          let edges = edgeGenerator(loc.nx/(nw-1)).map(edgeHelper)
-          for (let i=0; i<wallpaper.edges.length; i++) {
+          let clampedx = Math.min(Math.max(loc.nx-1, 0), nw-3)
+          let edges = edgeGenerator(clampedx/(nw-3)).map(edgeHelper)
+          for (let i=0; i<wallpaper.edgeEnds.length; i++) {
             for (let j=0; j<edgeTfs[i].length; j++) {
               result.push({
                 tf: edgeTfs[i][j],
@@ -167,13 +243,12 @@
     }
 
     function tile(edges) {
-      this.cpoint = wallpaper.cpoint
       this.anchors = wallpaper.anchors()
-      this.edges = edges || Array.from({length: wallpaper.edges.length}, () => [])
+      this.edges = edges || Array.from({length: wallpaper.edgeEnds.length}, () => [])
       this.fullEdges = function() {
         result = []
-        for (let i=0; i<wallpaper.edges.length;i++) {
-          result.push([this.anchors[wallpaper.edges[i].start]].concat(this.edges[i], [this.anchors[wallpaper.edges[i].end]]))
+        for (let i=0; i<wallpaper.edgeEnds.length;i++) {
+          result.push([this.anchors[wallpaper.edgeEnds[i][0]]].concat(this.edges[i], [this.anchors[wallpaper.edgeEnds[i][1]]]))
         }
         return result
       }
@@ -201,9 +276,13 @@
         .attr('d', d => parqGenerator(parqShape(d)));
 
       drawing.on('touchmove mousemove', moved)
-      	.on('mouseout', exited)
-      	.on('click', clicked)
+        .on('mouseout', exited)
+        .on('click', clicked)
         .on('enter', entered);
+    }
+
+    function bookbind(paper) {
+      paper.cmove.bind
     }
 
     function moved() {
@@ -221,7 +300,6 @@
       rotate = !rotate
     }
 
-    
   </script>
 </body>
 </html>
