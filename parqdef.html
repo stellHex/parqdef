@@ -33,7 +33,7 @@
 
   <script>
     var svg, drawing // should be defined by init
-    var shouldRedraw = true
+    var shouldRedraw = false
   
     var nw = 23, nh = 11
     var border = 50
@@ -44,15 +44,13 @@
 
     var prototiles // defined by restart
     var parqLocs // defined by reparameterize
-    var edgeGenerator, parqElements, edgeElements // defined by rerender
+    var parqElements, edgeElements // defined by rerender
+    var edgeGenerator // defined by rerender AND reupdate
 
-    const archetype = {
-      square: {
-
-      }
-    }
+    const rt3 = Math.sqrt(3)
+    const third = 1/3
     // note: inconsistent use of arrow functions and `function()` functions, because I don't like using `function()` functions
-    // in compact definitions like this, but they're neccesary because `this` can't be rebound on arrow functions
+    // in compact definitions like this, but they're necessary because `this` can't be rebound on arrow functions
     const wallpapers = {
       p1: {
         square: function() {
@@ -69,21 +67,21 @@
         rectangular: function() {
           Object.assign(this, new wallpapers.p1.square())
           this.cmove = (x,y) => [x,1]
-          this.anchors =  function () {return [[0, 0], [this.cpoint[0], 0], this.cpoint, [0, 1]]}
+          this.anchors = function () {return [[0, 0], [this.cpoint[0], 0], this.cpoint, [0, 1]]}
           this.edgeTfs = () => [['', `translate(-${this.cpoint[0]} 0)`], ['', 'translate(0 -1)']]
           this.tf = d => `translate(${this.cpoint[0]*d.nx} ${d.ny})`
         },
         oblique: function() {
           Object.assign(this, new wallpapers.p1.square())
           this.cmove = (x,y) => [x,y]
-          this.anchors =  () => [[0, 0], [1, 0], this.cpoint, [this.cpoint[0]-1, this.cpoint[1]]]
+          this.anchors = () => [[0, 0], [1, 0], this.cpoint, [this.cpoint[0]-1, this.cpoint[1]]]
           this.edgeTfs = () => [['', 'translate(-1 0)'], ['', `translate(${1-this.cpoint[0]} -${this.cpoint[1]})`]]
           this.tf = d => `translate(${d.nx + (this.cpoint[0]%1)*d.ny} ${this.cpoint[1] * d.ny})`
         },
         hexagonal: function() {
           this.cpoint = [Math.sqrt(3), 0.5]
-          this.cmove = (x,y) => [this.cpoint[0],0.5] // faster than calc'ing sqrt(3) again
-          this.anchors =  () => [[0, 0.5], [this.cpoint[0]/2, 0], this.cpoint, [this.cpoint[0]/2, 1]]
+          this.cmove = (x,y) => [this.cpoint[0],0.5]
+          this.anchors = function () {return [[0, 0.5], [this.cpoint[0]/2, 0], this.cpoint, [this.cpoint[0]/2, 1]]}
           this.edgeEnds = [[1, 2], [2, 3]],
           this.edgeTfs = () => [['',`translate(-${this.cpoint[0]/2} 0.5)`],['',`translate(-${this.cpoint[0]/2} -0.5)`]]
           this.tf = d => `translate(${d.nx*this.cpoint[0]/2} ${d.ny + (d.nx%2)/2})`
@@ -184,21 +182,21 @@
       },
       pmm: {},
       pmg: {
-        square_a: function() {
+        square_a: function() { // vertical mirror
           Object.assign(this, new wallpapers.p2.square())
           this.edgeEnds = [[3,4],[4,5]]
           this.edgeTfs = () => [['', 'rotate(180 1 0.5)', 'scale(-1 1) translate(-1 0)', 'scale(-1 1) rotate(180 0.5 0.5)'],
             ['', 'translate(0 -1)', 'scale(-1 1) translate(-1 0)', 'scale(-1 1) translate(-1 -1)']]
           this.tf = d => `translate(${d.nx} ${d.ny}) rotate(${(d.nx)%2 * 180} 0.5 0.5)`
         },
-        square_b: function() {
+        square_b: function() { // horizontal mirror
           Object.assign(this, new wallpapers.p2.square())
           this.edgeEnds = [[3,4],[4,5]]
           this.edgeTfs = () => [['', 'translate(-1 0)', 'scale(1 -1) translate(0 -1)', 'scale(1 -1) translate(-1 -1)'],
             ['', 'rotate(180 0.5 1)', 'scale(1 -1) translate(0 -1)', 'scale(1 -1) rotate(180 0.5 0.5)']]
           this.tf = d => `translate(${d.nx} ${d.ny}) rotate(${(d.ny)%2 * 180} 0.5 0.5)`
         },
-        rectangular_a: function() {
+        rectangular_a: function() { // vertical mirror
           Object.assign(this, new wallpapers.p2.rectangular())
           this.edgeEnds = [[3,4],[4,5]]
           this.edgeTfs = () => {let x = this.cpoint[0];
@@ -206,7 +204,7 @@
                     ['', 'translate(0 -1)', `scale(-1 1) translate(-${x} 0)`, `scale(-1 1) translate(-${x} -1)`]]}
           this.tf = d => `translate(${d.nx*this.cpoint[0]} ${d.ny}) rotate(${(d.nx)%2 * 180} ${this.cpoint[0]/2} 0.5)`
         },
-        rectangular_b: function() {
+        rectangular_b: function() { // horizontal mirror
           Object.assign(this, new wallpapers.p2.rectangular())
           this.edgeEnds = [[3,4],[4,5]]
           this.edgeTfs = () => {let x = this.cpoint[0];
@@ -259,32 +257,82 @@
       },
       p4m: {},
       p4g: {
-        square: function() {}
+        square: function() {
+          Object.assign(this, new wallpapers.cmm.square())
+          this.edgeTfs = () => [['', 'rotate(180 0.5 0.5)', 'rotate(-90 1 1)', 'rotate(90 1 0)',
+            'scale(-1 1) translate(-1 0)', 'scale(-1 1) rotate(90 0.5 -0.5)', 'scale(-1 1) rotate(-90 0.5 1.5)', 'scale(-1 1) rotate(180 0 0.5)']]
+          this.tf = d => `translate(${d.nx} ${d.ny}) rotate(${(d.nx+d.ny)%2 * 90} 0.5 0.5)`
+        }
       },
+      //cpoint not used for hexagons and triangles, 'cause there's no point
       p3: {
-        hexagonal_a: function() {}, // 1 edge with 6 tfs (hexagon)
-        hexagonal_b: function() {} // 2 edges with 2 tfs each (rhombus)
+        hexagonal_a: function() { // hexagons
+          this.anchors = () => [[0, 0.25], [rt3/4, 0], [rt3/2, 0.25], [rt3/2, 0.75], [rt3/4, 1], [0, 0.75]]
+          this.edgeEnds = [[2, 3]]
+          this.edgeTfs = () => [['', `rotate(120 ${rt3/4} 0.5)`, `rotate(-120 ${rt3/4} 0.5)`,
+            `rotate(120 ${rt3/2} 0.25)`, `translate(${-rt3/2} 0)`,`rotate(-120 ${rt3/2} 0.75)`]]
+          this.tf = d => `translate(${rt3/2 * (d.nx + (d.ny%2)/2)} ${d.ny*0.75})`
+        },
+        hexagonal_b: function() { // rhombuses
+          Object.assign(this, new wallpapers.p1.hexagonal())
+          this.edgeTfs = () => [['', `rotate(120 ${rt3/2} 0)`], ['', `rotate(-120 ${rt3/2} 1)`]]
+          this.tf = function (d) { // sorry about the mess..
+            const y = d.nx%2 ? d.ny : d.ny%3 == 2 ? d.ny : d.ny + 1 - 2*d.ny%3
+            if (y%3) return `translate(${d.nx*rt3/2} ${y - y%3 + (1-y%3%2)*1.5}) rotate(${(2-(d.nx+(y%3))%2)*120} ${rt3/2} 0.5)`
+            else return `translate(${(d.nx+0.5)*rt3/2} ${y - (d.nx%2)*1.5 + 0.75})`
+          }
+        }
       },
       p3m1: {},
       p31m: {
-        hexagonal_a: function() {}, // 1 edge with 12 tfs (hexagon)
-        hexagonal_b: function() {} // 1 edge with 4 tfs (rhombus)
+        hexagonal_a: function() { // hexagons
+          Object.assign(this, wallpapers.p3.hexagonal_a())
+          this.anchors = () => [[    0, 0.25], [rt3/8, 0.125], [rt3/4, 0], [rt3*0.375, 0.125], [rt3/2, 0.25], [rt3/2, 0.5],
+                                [rt3/2, 0.75], [rt3/8, 0.875], [rt3/4, 1], [rt3*0.125, 0.875], [    0, 0.75], [    0, 0.5]]
+          this.edgeEnds = [[5, 6]]
+          const oldEdgeTfs = this.edgeTfs()[0]
+          this.edgeTfs = () => [oldEdgeTfs.concat(
+            [`scale(-1, 1) rotate(180 ${rt3/4} 0.5)`, `scale(-1, 1) rotate(-60 ${rt3/4} 2)`, `scale(-1, 1) rotate(60 ${rt3/4} -1)`,
+            `scale(-1, 1) rotate(180 0 0.5)`, `scale(-1, 1) rotate(-60 0 1.25)`, `scale(-1, 1) rotate(60 0 -0.25)`]
+          )]
+        },
+        hexagonal_b: function() { // rhombuses
+          Object.assign(this, new wallpapers.p3.hexagonal_b())
+          this.edgeEnds = [[2,3]]
+          this.edgeTfs = () => [['', `rotate(-120 ${rt3/2} 1)`, `scale(-1, 1) rotate(60 ${rt3/2} -1)`, 'scale(-1, 1) rotate(180 0 0.5)']]
+        }
       },
       p6: {
-        hexagonal_a: function() {}, // 1 edge with 12 tfs (hexagon)
-        hexagonal_b: function() {}, // 1 edge with 4 tfs (rhombus)
-        hexagonal_c: function() {} // 1 edge with 6 tfs (triangle)
+        hexagonal_a: function() { // hexagons
+          Object.assign(this, new wallpapers.p31m.hexagonal_a())
+          oldEdgeTfs = this.edgeTfs()[0].slice(0,6)
+          this.edgeTfs = () => [oldEdgeTfs.concat([
+            `rotate(60 ${rt3/4} 0.5)`, `rotate(180 ${rt3/4} 0.5)`, `rotate(-60 ${rt3/4} 0.5)`,
+            `rotate(60 ${rt3/2} -0.25)`, `rotate(180 ${rt3/2} 0.5)`, `rotate(-60 ${rt3/2} 1.25)`,
+          ])]
+        },
+        hexagonal_b: function() { // rhombuses
+          Object.assign(this, new wallpapers.p31m.hexagonal_b())
+          this.edgeTfs = () => [['', `rotate(-120 ${rt3/2} 1)`, `rotate(180 ${rt3/2} 0.5)`, `rotate(60 ${rt3} 0.5)`]]
+        },
+        hexagonal_c: function() { // triangles
+          this.anchors = () => [[0, 0], [rt3/4, 0.25], [rt3/2, 0.5], [rt3/4, 0.75], [0, 1], [0, 0.5]]
+          this.edgeEnds = [[2, 3]]
+          this.edgeTfs = () => [['', `rotate(120 ${rt3*third/2} 0.5)`, `rotate(-120 ${rt3*third/2} 0.5)`,
+            `rotate(60 ${rt3/2} 0.5)`, `rotate(180 ${rt3/4} 0.75)`, 'rotate(-60 0 1)']]
+          this.tf = d => `translate(${d.nx*rt3/2} ${d.ny/2}) rotate(${((d.nx+d.ny)%2+1)*180} ${rt3/4} 0.5)`
+        }
       },
       p6m: {}
     }
 
-    var wallpaper = new wallpapers.p4.square()
+    var wallpaper = new wallpapers.p6.hexagonal_c()
 
     init()
     
     // testing p1.rhombic
-    // prototiles[0].edges = [[[Math.sqrt(3)/2, 0.5]], [[Math.sqrt(3)/2, 0.5]]]
-    // prototiles[1].edges = [[[Math.sqrt(3),0]], [[Math.sqrt(3), 1]]]
+    // prototiles[0].edges = [[[rt3/2, 0.5]], [[rt3/2, 0.5]]]
+    // prototiles[1].edges = [[[rt3,0]], [[rt3, 1]]]
 
     // testing pmg.rectangular_a or pmg.rectangular_b
     // wallpaper.cpoint = [1.5,1]
@@ -298,26 +346,49 @@
     // testing cm.square
     // prototiles[0].edges = [[[1.2,0.4],[1,0.5],[1.4,0.6]]]
     // prototiles[1].edges = [[[0.8,0.4],[1,0.5],[0.6,0.6]]]
-
     // testing cm.rhombic
-    // prototiles[0].edges = [[[Math.sqrt(3)*0.7, 0.1],[Math.sqrt(3)*0.75, 0.25],[Math.sqrt(3)*0.9, 0.05]]]
-    // prototiles[1].edges = [[[Math.sqrt(3)*0.55, 0.3],[Math.sqrt(3)*0.75, 0.25],[Math.sqrt(3)*0.75, 0.4]]]
+    // prototiles[0].edges = [[[rt3*0.7, 0.1],[rt3*0.75, 0.25],[rt3*0.9, 0.05]]]
+    // prototiles[1].edges = [[[rt3*0.55, 0.3],[rt3*0.75, 0.25],[rt3*0.75, 0.4]]]
 
     // testing cmm.square
-    prototiles[0].edges = [[[0.8,0.5]]]
-    prototiles[1].edges = [[[1.2,0.8]]]
+    // prototiles[0].edges = [[[0.8,0.5]]]
+    // prototiles[1].edges = [[[1.2,0.8]]]
     // testing cmm.rhombic
     // prototiles[0].edges = [[[1.5,0.4]]]
     // prototiles[1].edges = [[[1.4,0.5]]]
 
+    // testing p4g.square
+    // prototiles[0].edges = [[[0.5,1]]]
+    // prototiles[1].edges = [[[1.25,0.75]]]
+
+    // testing p3.hexagonal_a
+    // prototiles[0].edges = [[[1, 0.25]]]
+    // prototiles[1].edges = [[[rt3/4, 0.5]]]
+
+    // testing p3.hexagonal_b
+    // prototiles[0].edges = [[[rt3*0.75, 0],[rt3, 0.25]],[[rt3*0.5,0.5]]]
+    // prototiles[1].edges = [[[rt3*0.5, 0.25],[rt3*0.75, 0.5]],[[rt3,1]]]
+
+    // testing p31m.hexagonal_a or p6.hexagonal_a
+    // prototiles[0].edges = [[[1, 0.75]]]
+    // prototiles[1].edges = [[[rt3*0.32, 0.55]]]
+
+    // testing p31m.hexagonal_b or p6.hexagonal_b
+    // prototiles[0].edges = [[[rt3*0.5,0.5]]]
+    // prototiles[1].edges = [[[rt3*0.84,1]]]
+
+    // testing p6.hexagonal_c
+    // prototiles[0].edges = [[[rt3/2,1]]]
+    // prototiles[1].edges = [[[rt3/4,0.25]]]
+
     rerender()
 
-    d3.interval(function(dt) {
-      if (shouldRedraw) {
-        edgeElements.attr('d', d => d.data)
-        shouldRedraw = false
-      }
-    });
+    d3.interval(function(dt) { if (shouldRedraw) {
+      if (shouldRedraw == 4)      restart()
+      else if (shouldRedraw == 3) reparameterize()
+      else if (shouldRedraw == 2) rerender()
+      else                        reupdate()
+    }});
 
     function init() {
       svg = d3.select('svg')
@@ -345,7 +416,7 @@
       rerender()
     }
 
-    function rerender() { //inefficient -- don't need to recreate all elements every time
+    function rerender() {
       edgeGenerator = edgeGeneratorFactory()
       if (parqElements) parqElements.remove()
       parqElements = drawing.selectAll('g')
@@ -373,6 +444,28 @@
         .attr('transform', d => d.tf)
         .attr('d', d => d.data)
         .attr('fill', 'none')
+    }
+
+    function reupdate(cmoved=false) {
+      edgeGenerator = edgeGeneratorFactory()
+      if (cmoved) {
+        parqElements.attr('transform', wallpaper.tf)
+      }
+      edgeElements.data(loc => {
+          let result = []
+          let clampedx = Math.min(Math.max(loc.nx-1, 0), nw-3)
+          let edges = edgeGenerator(clampedx/(nw-3)).map(edgeHelper)
+          for (let i=0; i<wallpaper.edgeEnds.length; i++) {
+            for (let j=0; j<edgeTfs[i].length; j++) {
+              result.push({
+                tf: edgeTfs[i][j],
+                data: edges[i]
+              })
+            }
+          }
+          return result
+        })
+        .attr('d', d => d.data)
     }
 
     function tile(edges) {
