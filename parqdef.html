@@ -3,7 +3,7 @@
 
 <html lang='en'>
 <meta charset='utf-8'>
-<title>Parquet Deformation: I at the Center</title>
+<title>Parquet Definition</title>
 <meta content='D3 parquet deformation creator.' name='description'>
 <style>
   
@@ -22,8 +22,8 @@
   </div>
   
   <svg>
-    <g id='drawing'>
-    </g>
+    <g id='drawing'></g>
+    <g id='controls'></g>
   </svg>
   
   <script src='http://d3js.org/d3.v4.min.js'></script>
@@ -32,12 +32,12 @@
   <script src="https://d3js.org/d3-interpolate.v1.min.js"></script>
 
   <script>
-    var svg, drawing // should be defined by init
+    var svg, drawing, controls // should be defined by init
     var shouldRedraw = false
   
     var nw = 23, nh = 11
-    var border = 50
-    var width = 1200, scale = (width - border*2)/(1.5*nw), height = scale*nh + border*2, center = [width/2, height/2];
+    var border = 50, width = 1200, controlHeight = 150, controlWidth = width/controlHeight
+    var scale = (width - border*2)/(1.5*nw), height = scale*nh + controlHeight + border*3
     
   
     var edgeHelper = d3.line()
@@ -47,10 +47,12 @@
     var parqElements, edgeElements // defined by rerender
     var edgeGenerator // defined by rerender AND reupdate
 
+    var prototileElements, ptEdgeElements, ptCpointElements, ptAnchorElements, ptVertexElements // defined by createControls
+
     const rt3 = Math.sqrt(3)
     const third = 1/3
-    // note: inconsistent use of arrow functions and `function()` functions, because I don't like using `function()` functions
-    // in compact definitions like this, but they're necessary because `this` can't be rebound on arrow functions
+    // note: inconsistent use of arrow functions and `function()` functions, because I prefer arrow functions in
+    // compact definitions like this, but sometimes can't be used because their `this` can't be rebound
     const wallpapers = {
       p1: {
         square: function() {
@@ -326,62 +328,64 @@
       p6m: {}
     }
 
-    var wallpaper = new wallpapers.p6.hexagonal_c()
+    var wallpaper = new wallpapers.pgg.square()
 
     init()
     
-    // testing p1.rhombic
-    // prototiles[0].edges = [[[rt3/2, 0.5]], [[rt3/2, 0.5]]]
-    // prototiles[1].edges = [[[rt3,0]], [[rt3, 1]]]
+    {
+      // testing p1.rhombic
+      // prototiles[0].edges = [[[rt3/2, 0.5]], [[rt3/2, 0.5]]]
+      // prototiles[1].edges = [[[rt3,0]], [[rt3, 1]]]
 
-    // testing pmg.rectangular_a or pmg.rectangular_b
-    // wallpaper.cpoint = [1.5,1]
-    // prototiles[0].edges = [[[1.85,0.9]],[[1.4,0.75]]]
-    // prototiles[1].edges = [[[1.15,0.9]],[[1.4,1.25]]]
+      // testing pmg.rectangular_a or pmg.rectangular_b
+      // wallpaper.cpoint = [1.5,1]
+      // prototiles[0].edges = [[[1.85,0.9]],[[1.4,0.75]]]
+      // prototiles[1].edges = [[[1.15,0.9]],[[1.4,1.25]]]
 
-    // testing pgg.square
-    // prototiles[0].edges = [[[1.25,0.9]],[[0.9,0.75]]]
-    // prototiles[1].edges = [[[0.75,0.9]],[[0.9,1.25]]]
+      // testing pgg.square
+      prototiles[0].edges = [[[1.25,0.9]],[[0.9,0.75]]]
+      prototiles[1].edges = [[[0.75,0.9]],[[0.9,1.25]]]
 
-    // testing cm.square
-    // prototiles[0].edges = [[[1.2,0.4],[1,0.5],[1.4,0.6]]]
-    // prototiles[1].edges = [[[0.8,0.4],[1,0.5],[0.6,0.6]]]
-    // testing cm.rhombic
-    // prototiles[0].edges = [[[rt3*0.7, 0.1],[rt3*0.75, 0.25],[rt3*0.9, 0.05]]]
-    // prototiles[1].edges = [[[rt3*0.55, 0.3],[rt3*0.75, 0.25],[rt3*0.75, 0.4]]]
+      // testing cm.square
+      // prototiles[0].edges = [[[1.2,0.4],[1,0.5],[1.4,0.6]]]
+      // prototiles[1].edges = [[[0.8,0.4],[1,0.5],[0.6,0.6]]]
+      // testing cm.rhombic
+      // prototiles[0].edges = [[[rt3*0.7, 0.1],[rt3*0.75, 0.25],[rt3*0.9, 0.05]]]
+      // prototiles[1].edges = [[[rt3*0.55, 0.3],[rt3*0.75, 0.25],[rt3*0.75, 0.4]]]
 
-    // testing cmm.square
-    // prototiles[0].edges = [[[0.8,0.5]]]
-    // prototiles[1].edges = [[[1.2,0.8]]]
-    // testing cmm.rhombic
-    // prototiles[0].edges = [[[1.5,0.4]]]
-    // prototiles[1].edges = [[[1.4,0.5]]]
+      // testing cmm.square
+      // prototiles[0].edges = [[[0.8,0.5]]]
+      // prototiles[1].edges = [[[1.2,0.8]]]
+      // testing cmm.rhombic
+      // prototiles[0].edges = [[[1.5,0.4]]]
+      // prototiles[1].edges = [[[1.4,0.5]]]
 
-    // testing p4g.square
-    // prototiles[0].edges = [[[0.5,1]]]
-    // prototiles[1].edges = [[[1.25,0.75]]]
+      // testing p4g.square
+      // prototiles[0].edges = [[[0.5,1]]]
+      // prototiles[1].edges = [[[1.25,0.75]]]
 
-    // testing p3.hexagonal_a
-    // prototiles[0].edges = [[[1, 0.25]]]
-    // prototiles[1].edges = [[[rt3/4, 0.5]]]
+      // testing p3.hexagonal_a
+      // prototiles[0].edges = [[[1, 0.25]]]
+      // prototiles[1].edges = [[[rt3/4, 0.5]]]
 
-    // testing p3.hexagonal_b
-    // prototiles[0].edges = [[[rt3*0.75, 0],[rt3, 0.25]],[[rt3*0.5,0.5]]]
-    // prototiles[1].edges = [[[rt3*0.5, 0.25],[rt3*0.75, 0.5]],[[rt3,1]]]
+      // testing p3.hexagonal_b
+      // prototiles[0].edges = [[[rt3*0.75, 0],[rt3, 0.25]],[[rt3*0.5,0.5]]]
+      // prototiles[1].edges = [[[rt3*0.5, 0.25],[rt3*0.75, 0.5]],[[rt3,1]]]
 
-    // testing p31m.hexagonal_a or p6.hexagonal_a
-    // prototiles[0].edges = [[[1, 0.75]]]
-    // prototiles[1].edges = [[[rt3*0.32, 0.55]]]
+      // testing p31m.hexagonal_a or p6.hexagonal_a
+      // prototiles[0].edges = [[[1, 0.75]]]
+      // prototiles[1].edges = [[[rt3*0.32, 0.55]]]
 
-    // testing p31m.hexagonal_b or p6.hexagonal_b
-    // prototiles[0].edges = [[[rt3*0.5,0.5]]]
-    // prototiles[1].edges = [[[rt3*0.84,1]]]
+      // testing p31m.hexagonal_b or p6.hexagonal_b
+      // prototiles[0].edges = [[[rt3*0.5,0.5]]]
+      // prototiles[1].edges = [[[rt3*0.84,1]]]
 
-    // testing p6.hexagonal_c
-    // prototiles[0].edges = [[[rt3/2,1]]]
-    // prototiles[1].edges = [[[rt3/4,0.25]]]
+      // testing p6.hexagonal_c
+      // prototiles[0].edges = [[[rt3/2,1]]]
+      // prototiles[1].edges = [[[rt3/4,0.25]]]
+    }
 
-    rerender()
+    rerender(); createControls()
 
     d3.interval(function(dt) { if (shouldRedraw) {
       if (shouldRedraw == 4)      restart()
@@ -394,16 +398,17 @@
       svg = d3.select('svg')
         .attr('width', width)
         .attr('height', height)
-
       drawing = d3.select('#drawing')
-        .attr('transform', `translate(${border},${border}) scale(${scale})`)
-      
+        .attr('transform', `translate(${border} ${border}) scale(${scale})`)
+      controls = d3.select('#controls')
+        .attr('transform', `translate(${border} ${height - controlHeight - border}) scale(${controlHeight})`)
       restart()
     }
 
     function restart() {
       prototiles = [new tile(), new tile()]
       reparameterize()
+      createControls()
     }
 
     function reparameterize() {
@@ -466,6 +471,60 @@
           return result
         })
         .attr('d', d => d.data)
+    }
+
+    function createControls() {
+      if (prototileElements) prototileElements.remove()
+      prototileElements = controls.selectAll('g')
+        .data(prototiles).enter().append('g')
+        .attr('transform', (d,i,a) => `translate(${i*controlWidth/a.length + 0.25} 0.25) scale(0.5)`)
+
+      if (ptEdgeElements) ptEdgeElements.remove()
+      let edgeTfs = wallpaper.edgeTfs()
+      ptEdgeElements = prototileElements.selectAll('path')
+        .data(ptile => {
+          let result = []
+          let edges = ptile.fullEdges().map(edgeHelper)
+          for (let i=0; i<wallpaper.edgeEnds.length; i++) {
+            for (let j=0; j<edgeTfs[i].length; j++) {
+              result.push({
+                tf: edgeTfs[i][j],
+                data: edges[i]
+              })
+            }
+          }
+          return result
+        }).enter().append('path')
+        .attr('stroke', '#444')
+        .attr('stroke-width', 0.03)
+        .attr('transform', d => d.tf)
+        .attr('d', d => d.data)
+        .attr('fill', 'none')
+
+      if(ptCpointElements) ptCpointElements.remove()
+      ptCpointElements = controls.selectAll('g')
+        .data(ptile =>).enter().append('circle')
+        .attr('stroke', 'none')
+        .attr('transform', ``)
+        .attr('r', )
+        .attr('fill', )
+
+      if(ptAnchorElements) ptAnchorElements.remove()
+      ptAnchorElements = controls.selectAll('g')
+        .data(ptile =>).enter().append('circle')
+        .attr('stroke', 'none')
+        .attr('transform', ``)
+        .attr('r', )
+        .attr('fill', )
+
+      if(ptVertexElements) ptVertexElements.remove()
+      ptVertexElements = controls.selectAll('g')
+        .data(ptile =>).enter().append('circle')
+        .attr('stroke', 'none')
+        .attr('transform', ``)
+        .attr('r', )
+        .attr('fill', )
+
     }
 
     function tile(edges) {
