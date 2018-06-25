@@ -7,34 +7,73 @@
 <meta content='D3 parquet deformation creator.' name='description'>
 <style>
   
-  #inprogress {
-    display: none;
-    position: absolute;
-    top: 200px;
-    left: 300px;
-    font-size: 40px;
+  path.edge {
+    stroke: black;
+    stroke-width: 0.05;
+    fill: none;
   }
+
+  path.protoedge {
+    stroke: #444;
+    stroke-width: 0.04;
+    fill: none;
+  }
+  path.protoedge.active {
+    stroke: blue;
+    cursor: copy;
+  }
+
+  circle.anchor {
+    fill: black;
+    r: 0.06;
+  }
+
+  circle.cpoint {
+    stroke-width: 0.025;
+    stroke: black;
+    fill: gray;
+    r: 0.07;
+  }
+  circle.cpoint.active {
+    stroke: #c00;
+    fill: #f90;
+  }
+
+  circle.vertex {
+    stroke-width: 0.025;
+    stroke: #00a;
+    fill: #88f;
+    cursor: move;
+    r: 0.07;
+}
 
 </style>
 <body>  
-  <svg>
+  <svg id='main'>
     <g id='drawing'></g>
     <g id='controls'></g>
   </svg>
   
-  <script src='http://d3js.org/d3.v4.min.js'></script>
-  <script src="https://d3js.org/d3-drag.v1.min.js"></script>
+  <script src='http://d3js.org/d3.v4.js'></script>
+  <script src="https://d3js.org/d3-drag.v1.js"></script>
   <script src='https://d3js.org/d3-array.v1.min.js'></script>
   <script src='https://d3js.org/d3-shape.v1.min.js'></script>
   <script src="https://d3js.org/d3-interpolate.v1.min.js"></script>
 
   <script>
-    var svg, drawing, controls // should be defined by init
+
+    /*****************\
+    |*               *|
+    |*  SCAFFOLDING  *|
+    |*               *|
+    \*****************/
+
+    var svg, drawing, controls // defined by init
     var shouldRedraw = false
     var cmoved = false
   
     var nw = 23, nh = 11
-    var border = 50, width = 1200, controlHeight = 150, controlWidth = width/controlHeight
+    var border = 30, width = 1200, controlHeight = 150, controlWidth = width/controlHeight
     var scale = (width - border*2)/(1.5*nw), height = scale*nh + controlHeight + border*3
     
   
@@ -48,13 +87,11 @@
     var prototileElements, ptEdgeElements, ptCpointElements, ptAnchorElements,
       ptVertexWrappers, ptVertexElements // defined by rerenderControls
 
+    var edgeTfs // defined by many things
+
     const rt3 = Math.sqrt(3)
     const third = 1/3
 
-    /////////////////
-    // DEFINITIONS //
-    /////////////////
-    
     // note: inconsistent use of arrow functions and `function()` functions, because I prefer arrow functions in
     // compact definitions like this, but sometimes can't be used because their `this` can't be rebound
     const wallpapers = {
@@ -331,6 +368,65 @@
       p6m: {}
     }
 
+    const wallpaperDisplays = const wallpapers: [
+      [
+        {lattice: 'square', hint: '[ ]'},
+        {lattice: 'rectangular', hint: '[   ]'},
+        {lattice: 'oblique', hint: '\\   \\'},
+        {lattice: 'hexagonal', hint: '< >'},
+        {lattice: 'rhombic', hint: '<   >'}
+      ], [
+        {lattice: 'square', hint: '[ ]'},
+        {lattice: 'rectangular', hint: '[   ]'},
+        {lattice: 'oblique', hint: '\\   \\'},
+        {lattice: 'hexagonal', hint: '< >'},
+        {lattice: 'rhombic', hint: '<   >'}
+      ], [], [
+        {lattice: 'square A', hint: '[ ]'},
+        {lattice: 'square B', hint: '[ ]'},
+        {lattice: 'rectangular A', hint: '[   ]'},
+        {lattice: 'rectangular B', hint: '[   ]'}
+      ], [
+        {lattice: 'square', hint: '[ ]'},
+        {lattice: 'hexagonal A', hint: '< >'},
+        {lattice: 'hexagonal B', hint: '< >'},
+        {lattice: 'rhombic A', hint: '<   >'},
+        {lattice: 'rhombic B', hint: '<   >'}
+      ], [], [
+        {lattice: 'square A', hint: '[ ]'}
+        {lattice: 'square B', hint: '[ ]'},
+        {lattice: 'rectangular A', hint: '[   ]'},
+        {lattice: 'rectangular B', hint: '[   ]'}
+      ], [
+        {lattice: 'square', hint: '[ ]'},
+        {lattice: 'rectangular', hint: '[   ]'}
+      ], [
+        {lattice: 'square', hint: '[ ]'},
+        {lattice: 'hexagonal', hint: '< >'},
+        {lattice: 'rhombic', hint: '<   >'}
+      ], [
+        {lattice: 'square', hint: '[ ]'}
+      ], [], [
+        {lattice: 'square', hint: '[ ]'}
+      ], [
+        {lattice: 'hexagonal A', hint: '〔 〕'},
+        {lattice: 'hexagonal B', hint: '< >'}
+      ], [], [
+        {lattice: 'hexagonal A', hint: '〔 〕'},
+        {lattice: 'hexagonal B', hint: '< >'}
+      ], [
+        {lattice: 'hexagonal A', hint: '〔 〕'},
+        {lattice: 'hexagonal B', hint: '< >'},
+        {lattice: 'hexagonal C', hint: '\\ /'}
+      ], []
+    ]
+
+    /****************\
+    |*              *|
+    |*  INITIATION  *|
+    |*              *|
+    \****************/
+
     function tile(edges) {
       this.anchors = wallpaper.anchors()
       this.edges = edges || Array.from({length: wallpaper.edgeEnds.length}, () => [])
@@ -346,15 +442,16 @@
 
     const cpointDrag = d3.drag().on('drag', dragCpoint)
     const vertexDrag = d3.drag().on('drag', dragVertex)
+    const vertexCreate = d3.drag().on('drag', dragVertex).subject
 
-    var wallpaper = new wallpapers.p1.rhombic()
+    var wallpaper = new wallpapers.p3.hexagonal_a()
 
     init()
 
     {
       // testing p1.rhombic
-      prototiles[0].edges = [[[rt3/2, 0.5]], [[rt3/2, 0.5]]]
-      prototiles[1].edges = [[[rt3,0]], [[rt3, 1]]]
+      // prototiles[0].edges = [[[rt3/2, 0.5]], [[rt3/2, 0.5]]]
+      // prototiles[1].edges = [[[rt3,0]], [[rt3, 1]]]
 
       // testing pmg.rectangular_a or pmg.rectangular_b
       // wallpaper.cpoint = [1.5,1]
@@ -384,8 +481,8 @@
       // prototiles[1].edges = [[[1.25,0.75]]]
 
       // testing p3.hexagonal_a
-      // prototiles[0].edges = [[[1, 0.25]]]
-      // prototiles[1].edges = [[[rt3/4, 0.5]]]
+      prototiles[0].edges = [[[1, 0.25]]]
+      prototiles[1].edges = [[[rt3/4, 0.5]]]
 
       // testing p3.hexagonal_b
       // prototiles[0].edges = [[[rt3*0.75, 0],[rt3, 0.25]],[[rt3*0.5,0.5]]]
@@ -404,9 +501,9 @@
       // prototiles[1].edges = [[[rt3/4,0.25]]]
     }
 
-    rerender(); rerenderControls()
+    rerenderControls()
 
-    d3.interval(function(dt) { if (shouldRedraw) {
+    d3.interval(function(t) { if (shouldRedraw) {
       if      (shouldRedraw == 4) restart()
       else if (shouldRedraw == 3) reparameterize()
       else if (shouldRedraw == 2) rerender()
@@ -414,15 +511,17 @@
       shouldRedraw = false
     }});
 
-    /////////////////////
-    // MAKING IT HAPEN //
-    /////////////////////
+    /*************\
+    |*           *|
+    |*  DRAWING  *|
+    |*           *|
+    \*************/
 
     // initiate
     function init() {
       svg = d3.select('svg')
-        .attr('width', width)
-        .attr('height', height)
+        .style('width', width)
+        .style('height', height)
       drawing = d3.select('#drawing')
         .attr('transform', `translate(${border} ${border}) scale(${scale})`)
       controls = d3.select('#controls')
@@ -430,7 +529,7 @@
       reparameterize()
     }
 
-    // enumerate
+    // enumerate (TODO: add options)
     function reparameterize() {
       parqLocs = d3.cross(d3.range(nw), d3.range(nh), (a, b) => 
       ({
@@ -443,7 +542,6 @@
     // wipe the slate
     function restart() {
       prototiles = [new tile(), new tile()]
-      rerender()
       rerenderControls()
     }
 
@@ -453,29 +551,14 @@
       if (parqElements) parqElements.remove()
       parqElements = drawing.selectAll('g')
         .data(parqLocs).enter().append('g')
-        .attr('class', 'parq')
+        .classed('parq', true)
         .attr('transform', wallpaper.tf.bind(wallpaper))
-      let edgeTfs = wallpaper.edgeTfs()
+      edgeTfs = wallpaper.edgeTfs()
       edgeElements = parqElements.selectAll('path')
-        .data(loc => {
-          let result = []
-          let clampedx = Math.min(Math.max(loc.nx-1, 0), nw-3)
-          let edges = edgeGenerator(clampedx/(nw-3)).map(edgeHelper)
-          for (let i=0; i<wallpaper.edgeEnds.length; i++) {
-            for (let j=0; j<edgeTfs[i].length; j++) {
-              result.push({
-                tf: edgeTfs[i][j],
-                data: edges[i]
-              })
-            }
-          }
-          return result
-        }).enter().append('path')
-        .attr('stroke', 'black')
-        .attr('stroke-width', 0.05)
+        .data(loc => edgeData(edgeGenerator((clamp(1, loc.nx, nw-2)-1)/(nw-3)))).enter().append('path')
+        .classed('edge', true)
         .attr('transform', d => d.tf)
         .attr('d', d => d.data)
-        .attr('fill', 'none')
     }
 
     // mutate
@@ -483,25 +566,20 @@
       edgeGenerator = edgeGeneratorFactory()
       if (cmoved) {
         parqElements.attr('transform', wallpaper.tf.bind(wallpaper))
+        cmoved = false
       }
-      let edgeTfs = wallpaper.edgeTfs()
-      edgeElements.data(loc => {
-          let result = []
-          let clampedx = Math.min(Math.max(loc.nx-1, 0), nw-3)
-          let edges = edgeGenerator(clampedx/(nw-3)).map(edgeHelper)
-          for (let i=0; i<wallpaper.edgeEnds.length; i++) {
-            for (let j=0; j<edgeTfs[i].length; j++) {
-              result.push({
-                tf: edgeTfs[i][j],
-                data: edges[i]
-              })
-            }
-          }
-          return result
-        })
+      edgeTfs = wallpaper.edgeTfs()
+      edgeElements
+        .data(loc => edgeData(edgeGenerator((clamp(1, loc.nx, nw-2)-1)/(nw-3))))
         .attr('transform', d => d.tf)
         .attr('d', d => d.data)
     }
+
+    /**************\
+    |*            *|
+    |*  CONTROLS  *|
+    |*            *|
+    \**************/
 
     function rerenderControls() {
       if (prototileElements) prototileElements.remove()
@@ -510,49 +588,32 @@
         .attr('transform', (d,i,a) => `translate(${i*controlWidth/a.length + 0.25} 0.25) scale(0.5)`)
 
       if (ptEdgeElements) ptEdgeElements.remove()
-      let edgeTfs = wallpaper.edgeTfs()
+      edgeTfs = wallpaper.edgeTfs()
       ptEdgeElements = prototileElements.selectAll('path')
-        .data(ptile => {
-          let result = []
-          let edges = ptile.fullEdges().map(edgeHelper)
-          for (let i=0; i<wallpaper.edgeEnds.length; i++) {
-            for (let j=0; j<edgeTfs[i].length; j++) {
-              result.push({
-                tf: edgeTfs[i][j],
-                data: edges[i]
-              })
-            }
-          }
-          return result
-        }).enter().append('path')
-        .attr('stroke', d => d.tf? '#444':'blue')
-        .attr('stroke-width', 0.03)
+        .data(ptile => edgeData(ptile.fullEdges())).enter().append('path')
+        .classed('protoedge', true)
         .attr('transform', d => d.tf)
         .attr('d', d => d.data)
-        .attr('fill', 'none')
       ptEdgeElements.filter(d => !d.tf)
-        .attr('cursor', 'pointer')
-        // .on('click')
+        .classed('active', true)
+        .on('mousedown', addVertex)
 
       if(ptAnchorElements) ptAnchorElements.remove()
       ptAnchorElements = prototileElements.selectAll('circle.anchor')
         .data(pt => wallpaper.anchors()).enter().append('circle')
-        .attr('fill', 'black')
-        .attr('class', 'anchor')
-        .attr('transform', (d,i) => `translate(${d})`)
-        .attr('r', 0.06)
+        .classed('anchor', true)
+        .attr('cx', d => d[0])
+        .attr('cy', d => d[1])
 
       if (ptCpointElements) ptCpointElements.remove()
       if (wallpaper.cpoint) {
         ptCpointElements = prototileElements.selectAll('circle.cpoint')
           .data(pt => [wallpaper.cpoint]).enter().append('circle')
-          .attr('stroke-width', 0.025)
-          .attr('stroke', wallpaper.cmove.cursor=='default'? 'black':'#c00')
-          .attr('fill', wallpaper.cmove.cursor=='default'? 'gray':'#f90')
-          .attr('cursor', wallpaper.cmove.cursor)
-          .attr('class', 'cpoint')
-          .attr('transform', `translate(${wallpaper.cpoint})`)
-          .attr('r', 0.07)
+          .classed('cpoint', true)
+          .classed('active', wallpaper.cmove.cursor!='default')
+          .style('cursor', wallpaper.cmove.cursor)
+          .attr('cx', wallpaper.cpoint[0])
+          .attr('cy', wallpaper.cpoint[1])
           .call(cpointDrag)
       }
 
@@ -562,60 +623,46 @@
         .on('contextmenu', deleteVertex)
       ptVertexElements = ptVertexWrappers.selectAll('circle.vertex')
         .data(e => e).enter().append('circle')
-        .attr('stroke-width', 0.02)
-        .attr('stroke', '#008')
-        .attr('fill', '#44f')
-        .attr('cursor', 'move')
-        .attr('class', 'vertex')
-        .attr('transform', d => `translate(${d})`)
-        .attr('r', 0.06)
-        .attr('draggable', true)
+        .classed('vertex', true)
+        .attr('cx', d => d[0])
+        .attr('cy', d => d[1])
         .call(vertexDrag)
+
+      shouldRedraw = Math.max(2, shouldRedraw)
     }
 
     function reupdateControls() {
-      let edgeTfs = wallpaper.edgeTfs()
+      edgeTfs = wallpaper.edgeTfs()
       ptEdgeElements
-        .data(ptile => {
-          let result = []
-          let edges = ptile.fullEdges().map(edgeHelper)
-          for (let i=0; i<wallpaper.edgeEnds.length; i++) {
-            for (let j=0; j<edgeTfs[i].length; j++) {
-              result.push({
-                tf: edgeTfs[i][j],
-                data: edges[i]
-              })
-            }
-          }
-          return result
-        })
+        .data(ptile => edgeData(ptile.fullEdges()))
         .attr('transform', d => d.tf)
         .attr('d', d => d.data)
 
       ptAnchorElements
         .data(pt => wallpaper.anchors())
-        .attr('transform', (d,i) => `translate(${d})`)
+        .attr('cx', d => d[0])
+        .attr('cy', d => d[1])
 
       if (wallpaper.cpoint) {
         ptCpointElements
           .data(pt => [wallpaper.cpoint])
-          .attr('transform', `translate(${wallpaper.cpoint})`)
+          .attr('cx', wallpaper.cpoint[0])
+          .attr('cy', wallpaper.cpoint[1])
       }
 
       ptVertexElements
         .data(e => e)
-        .attr('transform', d => `translate(${d})`)
+        .attr('cx', d => d[0])
+        .attr('cy', d => d[1])
 
-      reupdate()
+      shouldRedraw = Math.max(1, shouldRedraw)
     }
 
-    ///////////////
-    // UTILITIES //
-    ///////////////
-
-    function edgeGeneratorFactory() {
-      return d3.piecewise(d3.interpolate, prototiles.map(t => t.fullEdges()))
-    }
+    /***************\
+    |*             *|
+    |*  LISTENERS  *|
+    |*             *|
+    \***************/
 
     function dragVertex(d, i, g) {
       d[0] = d3.event.x
@@ -628,17 +675,106 @@
       cmoved = true
       reupdateControls()
     }
-    let a=6
+
+    function addVertex(d, i, g) {
+      const point = clientToLocal(d3.event, this)
+      const dist = distanceAlongPath(this, clientToLocal(d3.event, this))
+      const whichTile = indexOf(this.parentNode.parentNode.children, this.parentNode)
+      const edge = prototiles[whichTile].fullEdges()[i]
+      let j = 0
+      while (distanceAlongPath(this, edge[j]) < dist && j < edge.length) j++
+      for (let k=0; k < prototiles.length; k++) {
+        let fulledge = prototiles[k].fullEdges()[i]
+        let newVertex = k == whichTile?
+          [point.x, point.y]:
+          d3.interpolate(fulledge[j-1],fulledge[j])(0.5)
+        prototiles[k].edges[i].splice(j-1,0,newVertex)
+      }
+      rerenderControls()
+      let newVertex = ptVertexWrappers._groups[whichTile][i].children[j-1]
+      d3.select(newVertex).dispatch('mouseup')
+      // selection.dispatch creates a custom event which doesn't have the "view" property
+      // d3.drag requires event.view, so we do this "properly" instead
+      let mouseDown = new MouseEvent('mousedown',
+        {view: window, bubbles: true, cancelable: true}
+      );
+      newVertex.dispatchEvent(mouseDown)
+    }
+
     function deleteVertex(d, i, g) {
       let e = d3.event
       e.preventDefault()
-      let index;
-      ptVertexElements.each(function(d,i,g) {if (this==e.target) {
-        a=g
-        group = ptVertexElements._groups.indexOf(g); index = i
-        console.log(g, i)
-      }})
-      prototiles[i][group][index]
+      const whichTile = indexOf(this.parentNode.parentNode.children, this.parentNode)
+      const j = indexOf(e.target.parentNode.children, e.target)
+      for (let k=0; k < prototiles.length; k++){
+        prototiles[k].edges[i].splice(j, 1)
+      }
+      rerenderControls()
+    }
+
+    /***************\
+    |*             *|
+    |*  UTILITIES  *|
+    |*             *|
+    \***************/
+
+    function edgeGeneratorFactory() {
+      return d3.piecewise(d3.interpolate, prototiles.map(t => t.fullEdges()))
+    }
+
+    function clientToLocal(e, svgEl) {
+      let point = svg.node().createSVGPoint()
+      point.x = e.clientX; point.y = e.clientY
+      point = point.matrixTransform(svgEl.getScreenCTM().inverse())
+      return point
+    }
+
+    function distanceAlongPath(path, point) {
+      const length = path.getTotalLength()
+      const delta = length/1024
+      let i = 0
+      let best, bestDist = length**2
+
+      if (Array.isArray(point)) {
+        let temppoint = svg.node().createSVGPoint()
+        temppoint.x = point[0]; temppoint.y = point[1]
+        point = temppoint
+      }
+
+      while (i < 1024 && bestDist > delta**2) {
+        let point2 = path.getPointAtLength(i*delta)
+        let dist = (point.x-point2.x)**2 + (point.y-point2.y)**2
+        if (dist > (64*delta)**2) i+=64
+        else if (dist > (8*delta)**2) i+=8
+        else i += 1
+        if (dist < bestDist) {
+          bestDist = dist
+          best = i
+        }
+      }
+      return best*delta
+    }
+
+    function edgeData(edges) {
+      edges = edges.map(edgeHelper)
+      let result = []
+      for (let i=0; i<wallpaper.edgeEnds.length; i++) {
+        for (let j=0; j<edgeTfs[i].length; j++) {
+          result.push({
+            tf: edgeTfs[i][j],
+            data: edges[i]
+          })
+        }
+      }
+      return result
+    }
+
+    function clamp (a, val, b) {
+      return Math.max(a, Math.min(val, b))
+    }
+
+    function indexOf(that, e) {
+      return Array.prototype.indexOf.call(that, e)
     }
 
   </script>
