@@ -7,6 +7,47 @@
 <meta content='D3 parquet deformation creator.' name='description'>
 <style>
   
+  #wpWrapper {
+    overflow: scroll;
+    background-color: black;
+  }
+  #wpDisplay {
+    margin: 3px;
+    border-collapse: collapse;
+    font-family: monospace;
+  }
+
+  .wpGroup:nth-child(2n-1) {background-color: lightgray;}
+  .wpGroup:nth-child(2n) {background-color: whitesmoke;}
+  
+  .wpVariant {display: table-row;}
+  .wpVariant:hover {outline: 3px solid rgba(100, 100, 255, 0.75);}
+  .wpVariant input {display: none;}
+
+  #wpDisplay td {
+    padding-left: 2px; padding-right: 2px;
+    border-collapse: collapse;
+  }
+  .wpSymmetry, .wpLattice {text-align: right;}
+  .wpHint {text-align: center;}
+  .wpHint code {
+    display: block;
+    border: 1px solid black;
+    padding: 1px;
+    padding-top: 0px;
+    padding-bottom: 2px;
+    background-color: white;
+  }
+  input:checked ~ * {
+    font-weight: bold;
+    background-color: #49f;
+    color: white;
+  }
+  input:checked ~ .wpHint code {
+    background-color: midnightblue;
+    border-color: #49f;
+  }
+
   path.edge {
     stroke: black;
     stroke-width: 0.05;
@@ -27,7 +68,6 @@
     fill: black;
     r: 0.06;
   }
-
   circle.cpoint {
     stroke-width: 0.025;
     stroke: black;
@@ -38,24 +78,29 @@
     stroke: #c00;
     fill: #f90;
   }
-
   circle.vertex {
     stroke-width: 0.025;
     stroke: #00a;
     fill: #88f;
     cursor: move;
     r: 0.07;
-}
+    opacity: 0.9
+  }
 
 </style>
-<body>  
-  <svg id='main'>
-    <g id='drawing'></g>
-    <g id='controls'></g>
-  </svg>
+<body>
+  <table><tr>
+    <td><nobr><div id='wpWrapper'>
+      <table id='wpDisplay'></table>
+    </div></nobr></td>
+    <td><svg id='main'>
+      <g id='drawing'></g>
+      <g id='controls'></g>
+    </svg></td>
+  </tr></table>
   
-  <script src='http://d3js.org/d3.v4.js'></script>
-  <script src="https://d3js.org/d3-drag.v1.js"></script>
+  <script src='http://d3js.org/d3.v4.min.js'></script>
+  <script src="https://d3js.org/d3-drag.v1.min.js"></script>
   <script src='https://d3js.org/d3-array.v1.min.js'></script>
   <script src='https://d3js.org/d3-shape.v1.min.js'></script>
   <script src="https://d3js.org/d3-interpolate.v1.min.js"></script>
@@ -68,7 +113,7 @@
     |*               *|
     \*****************/
 
-    var svg, drawing, controls // defined by init
+    var wpDisplay, symmetryElements, latticeElements, svg, drawing, controls // defined by init
     var shouldRedraw = false
     var cmoved = false
   
@@ -76,7 +121,7 @@
     var border = 30, width = 1200, controlHeight = 150, controlWidth = width/controlHeight
     var scale = (width - border*2)/(1.5*nw), height = scale*nh + controlHeight + border*3
     
-  
+    // creates svg path data strings from lists of points
     const edgeHelper = d3.line()
 
     var prototiles // defined by restart
@@ -93,7 +138,7 @@
     const third = 1/3
 
     // note: inconsistent use of arrow functions and `function()` functions, because I prefer arrow functions in
-    // compact definitions like this, but sometimes can't be used because their `this` can't be rebound
+    // compact definitions like this, but sometimes they can't be used because their `this` can't be rebound
     const wallpapers = {
       p1: {
         square: function() {
@@ -164,7 +209,7 @@
             return [[0, 0.5], [x*0.25, 0.25], [x*0.5, 0], [x*0.75, 0.25], [x, 0.5], [x*0.75, 0.75], [x*0.5, 1], [x*0.25, 0.75]]}
           this.edgeEnds = [[0,1],[2,3],[4,5],[6,7]]
           this.edgeTfs = function() {a = this.anchors(); return Array.from({length:4}, (e,i) => ['', `rotate(180 ${a[i*2+1]})`])}
-          this.tf = function(d) {console.log(this);return `translate(${d.nx*this.cpoint[0]/2} ${d.ny + (d.nx%2)/2}) rotate(${d.nx%2 * 180} ${this.cpoint[0]/2} 0.5)`}
+          this.tf = function(d) {return `translate(${d.nx*this.cpoint[0]/2} ${d.ny + (d.nx%2)/2}) rotate(${d.nx%2 * 180} ${this.cpoint[0]/2} 0.5)`}
         },
         rhombic: function() {
           Object.assign(this, new wallpapers.p2.hexagonal())
@@ -328,7 +373,7 @@
       p3m1: {},
       p31m: {
         hexagonal_a: function() { // hexagons
-          Object.assign(this, wallpapers.p3.hexagonal_a())
+          Object.assign(this, new wallpapers.p3.hexagonal_a())
           this.anchors = () => [[    0, 0.25], [rt3/8, 0.125], [rt3/4, 0], [rt3*0.375, 0.125], [rt3/2, 0.25], [rt3/2, 0.5],
                                 [rt3/2, 0.75], [rt3/8, 0.875], [rt3/4, 1], [rt3*0.125, 0.875], [    0, 0.75], [    0, 0.5]]
           this.edgeEnds = [[5, 6]]
@@ -368,64 +413,47 @@
       p6m: {}
     }
 
-    const wallpaperDisplays = const wallpapers: [
+    // for display
+    const wpData = [
       [
-        {lattice: 'square', hint: '[ ]'},
-        {lattice: 'rectangular', hint: '[   ]'},
-        {lattice: 'oblique', hint: '\\   \\'},
-        {lattice: 'hexagonal', hint: '< >'},
-        {lattice: 'rhombic', hint: '<   >'}
+        {variant: wallpapers.p1.rectangular, symmetry: 'p1', lattice: 'Rectangular', hint: '[ o ]'},
+        {variant: wallpapers.p1.oblique, symmetry: 'p1', lattice: 'Oblique', hint: '\\ o \\'},
+        {variant: wallpapers.p1.rhombic, symmetry: 'p1', lattice: 'Rhombic', hint: '< o >'}
       ], [
-        {lattice: 'square', hint: '[ ]'},
-        {lattice: 'rectangular', hint: '[   ]'},
-        {lattice: 'oblique', hint: '\\   \\'},
-        {lattice: 'hexagonal', hint: '< >'},
-        {lattice: 'rhombic', hint: '<   >'}
-      ], [], [
-        {lattice: 'square A', hint: '[ ]'},
-        {lattice: 'square B', hint: '[ ]'},
-        {lattice: 'rectangular A', hint: '[   ]'},
-        {lattice: 'rectangular B', hint: '[   ]'}
+        {variant: wallpapers.p2.rectangular, symmetry: 'p2', lattice: 'Rectangular', hint: '[ ~ ]'},
+        {variant: wallpapers.p2.oblique, symmetry: 'p2', lattice: 'Oblique', hint: '\\ ~ \\'},
+        {variant: wallpapers.p2.rhombic, symmetry: 'p2', lattice: 'Rhombic', hint: '< ~ >'}
       ], [
-        {lattice: 'square', hint: '[ ]'},
-        {lattice: 'hexagonal A', hint: '< >'},
-        {lattice: 'hexagonal B', hint: '< >'},
-        {lattice: 'rhombic A', hint: '<   >'},
-        {lattice: 'rhombic B', hint: '<   >'}
-      ], [], [
-        {lattice: 'square A', hint: '[ ]'}
-        {lattice: 'square B', hint: '[ ]'},
-        {lattice: 'rectangular A', hint: '[   ]'},
-        {lattice: 'rectangular B', hint: '[   ]'}
+        {variant: wallpapers.pg.rectangular_a, symmetry: 'pg', lattice: 'Rectangular A', hint: '[ Z ]'},
+        {variant: wallpapers.pg.rectangular_b, symmetry: 'pg', lattice: 'Rectangular B', hint: '[ N ]'}
       ], [
-        {lattice: 'square', hint: '[ ]'},
-        {lattice: 'rectangular', hint: '[   ]'}
+        {variant: wallpapers.cm.square, symmetry: 'cm', lattice: 'Square', hint: ' [/] '},
+        {variant: wallpapers.cm.rhombic_a, symmetry: 'cm', lattice: 'Rhombic A', hint: '< T >'},
+        {variant: wallpapers.cm.rhombic_b, symmetry: 'cm', lattice: 'Rhombic B', hint: '< E >'}
       ], [
-        {lattice: 'square', hint: '[ ]'},
-        {lattice: 'hexagonal', hint: '< >'},
-        {lattice: 'rhombic', hint: '<   >'}
+        {variant: wallpapers.pmg.rectangular_a, symmetry: 'pmg', lattice: 'Rectangular A', hint: '[ T ]'},
+        {variant: wallpapers.pmg.rectangular_b, symmetry: 'pmg', lattice: 'Rectangular B', hint: '[ E ]'}
       ], [
-        {lattice: 'square', hint: '[ ]'}
-      ], [], [
-        {lattice: 'square', hint: '[ ]'}
+        {variant: wallpapers.pgg.rectangular, symmetry: 'pgg', lattice: 'Rectangular', hint: '[ % ]'}
       ], [
-        {lattice: 'hexagonal A', hint: '〔 〕'},
-        {lattice: 'hexagonal B', hint: '< >'}
-      ], [], [
-        {lattice: 'hexagonal A', hint: '〔 〕'},
-        {lattice: 'hexagonal B', hint: '< >'}
+        {variant: wallpapers.cmm.square, symmetry: 'cmm', lattice: 'Square', hint: ' [X] '},
+        {variant: wallpapers.cmm.rhombic, symmetry: 'cmm', lattice: 'Rhombic', hint: '< X >'}
       ], [
-        {lattice: 'hexagonal A', hint: '〔 〕'},
-        {lattice: 'hexagonal B', hint: '< >'},
-        {lattice: 'hexagonal C', hint: '\\ /'}
-      ], []
+        {variant: wallpapers.p4.square, symmetry: 'p4', lattice: 'Square', hint: ' [+] '}
+      ], [
+        {variant: wallpapers.p4g.square, symmetry: 'p4g', lattice: 'Square', hint: ' [H] '}
+      ], [
+        {variant: wallpapers.p3.hexagonal_a, symmetry: 'p3', lattice: 'Hexagonal A', hint: '〔 〕'},
+        {variant: wallpapers.p3.hexagonal_b, symmetry: 'p3', lattice: 'Hexagonal B', hint: ' < > '}
+      ], [
+        {variant: wallpapers.p31m.hexagonal_a, symmetry: 'p31m', lattice: 'Hexagonal A', hint: '〔Y〕'},
+        {variant: wallpapers.p31m.hexagonal_b, symmetry: 'p31m', lattice: 'Hexagonal B', hint: ' <Y> '}
+      ], [
+        {variant: wallpapers.p6.hexagonal_a, symmetry: 'p6', lattice: 'Hexagonal A', hint: '〔*〕'},
+        {variant: wallpapers.p6.hexagonal_b, symmetry: 'p6', lattice: 'Hexagonal B', hint: ' <*> '},
+        {variant: wallpapers.p6.hexagonal_c, symmetry: 'p6', lattice: 'Hexagonal C', hint: ' |*> '}
+      ]
     ]
-
-    /****************\
-    |*              *|
-    |*  INITIATION  *|
-    |*              *|
-    \****************/
 
     function tile(edges) {
       this.anchors = wallpaper.anchors()
@@ -440,11 +468,17 @@
       }
     }
 
+    /****************\
+    |*              *|
+    |*  INITIATION  *|
+    |*              *|
+    \****************/
+
     const cpointDrag = d3.drag().on('drag', dragCpoint)
     const vertexDrag = d3.drag().on('drag', dragVertex)
     const vertexCreate = d3.drag().on('drag', dragVertex).subject
 
-    var wallpaper = new wallpapers.p3.hexagonal_a()
+    var wallpaper
 
     init()
 
@@ -481,8 +515,8 @@
       // prototiles[1].edges = [[[1.25,0.75]]]
 
       // testing p3.hexagonal_a
-      prototiles[0].edges = [[[1, 0.25]]]
-      prototiles[1].edges = [[[rt3/4, 0.5]]]
+      // prototiles[0].edges = [[[1, 0.25]]]
+      // prototiles[1].edges = [[[rt3/4, 0.5]]]
 
       // testing p3.hexagonal_b
       // prototiles[0].edges = [[[rt3*0.75, 0],[rt3, 0.25]],[[rt3*0.5,0.5]]]
@@ -509,7 +543,7 @@
       else if (shouldRedraw == 2) rerender()
       else                        reupdate()
       shouldRedraw = false
-    }});
+    }})
 
     /*************\
     |*           *|
@@ -519,13 +553,46 @@
 
     // initiate
     function init() {
-      svg = d3.select('svg')
+      wpDisplay = d3.select('#wpDisplay').datum(wpData)
+      symmetryElements = wpDisplay.selectAll('tbody')
+        .data(d => d).enter().append('tbody')
+        .classed('wpGroup', true)
+      latticeElements = symmetryElements.selectAll('label')
+        .data(d => d).enter().append('label')
+        .classed('wpVariant', true)
+        .attr('for', d => d.symmetry+d.lattice.replace(/ /g, ''))
+        .on('click', d => {wallpaper = new d.variant(); restart()})
+
+      latticeElements.append('input')
+        .attr('type', 'radio')
+        .attr('name', 'wallpaper')
+        .attr('id', d => d.symmetry+d.lattice.replace(/ /g, ''))
+      latticeElements.append('td')
+        .classed('wpSymmetry', true)
+        .append('label')
+        .text(d => d.symmetry)
+      latticeElements.append('td')
+        .classed('wpLattice', true)
+        .text(d => d.lattice)
+      latticeElements.append('td')
+        .classed('wpHint', true)
+        .append('code')
+        .text(d => d.hint)
+
+      svg = d3.select('#main')
         .style('width', width)
         .style('height', height)
       drawing = d3.select('#drawing')
         .attr('transform', `translate(${border} ${border}) scale(${scale})`)
       controls = d3.select('#controls')
         .attr('transform', `translate(${border} ${height - controlHeight - border}) scale(${controlHeight})`)
+
+      latticeElements
+        .filter(d => d.symmetry == 'cm' && d.lattice == 'Rhombic B')
+        .select('input')
+        .node().checked = true
+      wallpaper = new wallpapers.cm.rhombic_b()
+
       reparameterize()
     }
 
@@ -658,6 +725,14 @@
       shouldRedraw = Math.max(1, shouldRedraw)
     }
 
+    function load(s) {
+      deformation = JSON.parse(s)
+      wallpaper = new wallpapers[deformation.symmetry][deformation.lattice]()
+      wallpaper.cpoint = deformation.cpoint
+      prototiles = deformation.tiles.map(t => new tile(t))
+      rerenderControls()
+    }
+
     /***************\
     |*             *|
     |*  LISTENERS  *|
@@ -767,6 +842,27 @@
         }
       }
       return result
+    }
+
+    function savestring() {
+      let lattice = wallpaper.constructor;
+      let symmetry
+      for (let sym in wallpapers) {
+        if (wallpapers[sym][lattice.name] === lattice) {
+          symmetry = sym; break
+        }
+      }
+      return JSON.stringify({
+        symmetry: symmetry,
+        lattice: lattice.name,
+        cpoint: wallpaper.cpoint,
+        tiles: prototiles.map(t => t.edges)
+      }, (key, val) => val.toFixed? val.toFixed(4).replace(/0*$/,'') : val, 2)
+      .replace(/"(\d+(\.\d+)?)"/g, "$1")
+    }
+
+    function prettifySaveString(s) {
+
     }
 
     function clamp (a, val, b) {
