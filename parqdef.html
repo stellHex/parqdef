@@ -11,23 +11,32 @@
   }
 
   /*button styles swiped from google*/
-  td.button {
-      color: #333333;
-      background: #e3e3e3;
-      border: 1px #cacaca solid;
-      padding: 5px 10px;
-      border-radius: 2px;
-      font-weight: bold;
-      font-size: 9pt;
-      outline: none;
-      cursor: default;
-  } td.button:hover {
-      border: 1px #b6b6b6 solid;
-      box-shadow: 1px 1px 1px #dadada;
-      color: #222;
-      background: #e7e7e7;
-  } td.button:active {
-      box-shadow: inset 1px 1px 1px #cfcfcf;   
+  td.button, button {
+    color: #333333;
+    background: #f3f3f3;
+    border: 1px #dadada solid;
+    padding: 5px 10px;
+    border-radius: 2px;
+    font-weight: bold;
+    font-size: 9pt;
+    outline: none;
+    cursor: default;
+    user-select: none;
+  }
+  td.button:hover, button:hover {
+    border: 1px #c6c6c6 solid;
+    box-shadow: 1px 1px 1px #eaeaea;
+    color: #222;
+    background: #f7f7f7;
+  }
+  td.button:active, button:active {
+    box-shadow: inset 1px 1px 1px #dfdfdf;   
+  }
+  button.help {
+    padding: 2px 6px;
+    border-radius: 1000px;
+    border: 1px #dadada solid;
+    outline: none;
   }
 
   #wpWrapper {
@@ -70,19 +79,10 @@
     border-color: #49f;
   }
 
-  #buttons {list-style: none}
-  #buttons button {display: table-cell;}
-
   #saveArea {
     margin: 10px;
     resize: vertical;
     width: 75%;
-  }
-
-  path.edge {
-    stroke: black;
-    stroke-width: 0.05;
-    fill: none;
   }
 
   path.protoedge {
@@ -117,7 +117,13 @@
     r: 0.07;
     opacity: 0.9
   }
-
+</style>
+<style id='shortStyle'>
+  path.edge {
+    stroke: black;
+    stroke-width: 0.05;
+    fill: none;
+  }
 </style>
 <body>
   <table>
@@ -132,7 +138,9 @@
     </tr>
     <tr>
       <td><table id='buttons'><tbody>
-        <tr><td class='button' id='save'>blah</td></tr>
+        <tr>
+          <td class='button' id='downloadSVG'>Download SVG</td>
+          <td><button>?</button></td></tr>
         <tr><td class='button' id='save'>blah</td></tr>
         <tr><td class='button' id='save'>blah</td></tr>
         <tr><td class='button' id='save'>blah</td></tr>
@@ -148,6 +156,7 @@
   <script src='https://d3js.org/d3-array.v1.min.js'></script>
   <script src='https://d3js.org/d3-shape.v1.js'></script>
   <script src="https://d3js.org/d3-interpolate.v1.min.js"></script>
+  <script src="https://s3-us-west-2.amazonaws.com/s.cdpn.io/14082/FileSaver.js"></script>
 
   <script>
 
@@ -174,8 +183,7 @@
 
     const assign = Object.assign  
 
-    var prototiles // defined by restart
-    var parqLocs // defined by reparameterize
+    var parqLocs, prototiles // defined by restart
     var parqElements, edgeElements // defined by rerender
     var edgeGenerator // defined by rerender AND reupdate
     var edgeTfs // defined by many things
@@ -199,21 +207,21 @@
             [2, 3]  // if variable cpoints implemented, will instead be indices of tile.anchors
           ]
           this.edgeTfs = () => [['', 'translate(-1 0)'], ['', 'translate(0 -1)']]
-          this.tf = d => `translate(${d.nx} ${d.ny})`
+          this.tf = function(d) {return `translate(${d.nx} ${d.ny})`}
         },
         rectangular: function() {
           assign(this, new wallpapers.p1.square())
           this.cmove = (x,y) => [x,1]; this.cmove.cursor = 'ew-resize'
           this.anchors = function () {return [[0, 0], [this.cpoint[0], 0], this.cpoint, [0, 1]]}
           this.edgeTfs = () => [['', `translate(-${this.cpoint[0]} 0)`], ['', 'translate(0 -1)']]
-          this.tf = d => `translate(${this.cpoint[0]*d.nx} ${d.ny})`
+          this.tf = function(d) {return `translate(${this.cpoint[0]*d.nx} ${d.ny})`}
         },
         oblique: function() {
           assign(this, new wallpapers.p1.square())
           this.cmove = (x,y) => [x,y]; this.cmove.cursor = 'move'
           this.anchors = () => [[0, 0], [1, 0], this.cpoint, [this.cpoint[0]-1, this.cpoint[1]]]
           this.edgeTfs = () => [['', 'translate(-1 0)'], ['', `translate(${1-this.cpoint[0]} -${this.cpoint[1]})`]]
-          this.tf = d => `translate(${d.nx + (this.cpoint[0]%1)*d.ny} ${this.cpoint[1] * d.ny})`
+          this.tf = function(d) {return `translate(${d.nx + (this.cpoint[0]%1)*d.ny} ${this.cpoint[1] * d.ny})`}
         },
         hexagonal: function() {
           this.cpoint = [Math.sqrt(3), 0.5]
@@ -221,7 +229,7 @@
           this.anchors = function () {return [[0, 0.5], [this.cpoint[0]/2, 0], this.cpoint, [this.cpoint[0]/2, 1]]}
           this.edgeEnds = [[1, 2], [2, 3]],
           this.edgeTfs = () => [['',`translate(-${this.cpoint[0]/2} 0.5)`],['',`translate(-${this.cpoint[0]/2} -0.5)`]]
-          this.tf = d => `translate(${d.nx*this.cpoint[0]/2} ${d.ny + (d.nx%2)/2})`
+          this.tf = function(d) {return `translate(${d.nx*this.cpoint[0]/2} ${d.ny + (d.nx%2)/2})`}
         },
         rhombic: function() {
           assign(this, new wallpapers.p1.hexagonal())
@@ -235,20 +243,20 @@
           this.anchors = () => [[0, 0], [0.5, 0], [1, 0], [1, 0.5], [1, 1], [0.5, 1], [0, 1], [0, 0.5]]
           this.edgeEnds = [[0,1],[2,3],[4,5],[6,7]]
           this.edgeTfs = function () {let a = this.anchors(); return Array.from({length:4}, (e,i) => ['', `rotate(180 ${a[i*2+1]})`])}
-          this.tf = d => `translate(${d.nx} ${d.ny}) rotate(${(d.nx+d.ny)%2 * 180} 0.5 0.5)`
+          this.tf = function(d) {return `translate(${d.nx} ${d.ny}) rotate(${(d.nx+d.ny)%2 * 180} 0.5 0.5)`}
         },
         rectangular: function() {
           assign(this, new wallpapers.p2.square())
           this.cmove = (x,y) => [x,1]; this.cmove.cursor = 'ew-resize'
           this.anchors = function () {let x=this.cpoint[0]; return [[0, 0], [x/2, 0], [x, 0], [x, 0.5], [x, 1], [x/2, 1], [0, 1], [0, 0.5]]}
-          this.tf = d => `translate(${d.nx*this.cpoint[0]} ${d.ny}) rotate(${(d.nx+d.ny)%2 * 180} ${this.cpoint[0]/2} 0.5)`
+          this.tf = function(d) {return `translate(${d.nx*this.cpoint[0]} ${d.ny}) rotate(${(d.nx+d.ny)%2 * 180} ${this.cpoint[0]/2} 0.5)`}
         },
         oblique: function() {
           assign(this, new wallpapers.p2.square())
           this.cmove = (x,y) => [x,y]; this.cmove.cursor = 'move'
           this.anchors = () => {let x=this.cpoint[0]; let y=this.cpoint[1];
             return [[0, 0], [0.5, 0], [1, 0], [x/2+0.5, y/2], [x, y], [x-0.5, y], [x-1, y], [(x-1)/2, y/2]]}
-          this.tf = d => {let x=this.cpoint[0]; let y=this.cpoint[1];
+          this.tf = function(d) {let x=this.cpoint[0]; let y=this.cpoint[1];
             return `translate(${d.nx + (x%1)*d.ny} ${y*d.ny}) rotate(${(d.nx+d.ny)%2 * 180} ${x/2} ${y/2})`}
         },
         hexagonal: function() {
@@ -270,22 +278,22 @@
         square_a: function() {
           assign(this, new wallpapers.p1.square())
           this.edgeTfs = () => [['', 'translate(-1 1) scale(1 -1)'], ['', 'translate(0 -1)']],
-          this.tf = d => `translate(${d.nx} ${d.ny+d.nx%2}) ${d.nx%2?'scale(1 -1)':''}`
+          this.tf = function(d) {return `translate(${d.nx} ${d.ny+d.nx%2}) ${d.nx%2?'scale(1 -1)':''}`}
         },
         square_b: function() {
           assign(this, new wallpapers.p1.square())
           this.edgeTfs = () => [['', 'translate(-1 0)'], ['', 'translate(1 -1) scale(-1 1)']],
-          this.tf = d => `translate(${d.nx+d.ny%2} ${d.ny}) ${d.ny%2?'scale(-1 1)':''}`
+          this.tf = function(d) {return `translate(${d.nx+d.ny%2} ${d.ny}) ${d.ny%2?'scale(-1 1)':''}`}
         },
         rectangular_a: function() {
           assign(this, new wallpapers.p1.rectangular())
           this.edgeTfs = () => [['', `translate(-${this.cpoint[0]} 1) scale(1 -1)`], ['', 'translate(0 -1)']],
-          this.tf = d => `translate(${this.cpoint[0]*d.nx} ${d.ny+d.nx%2}) ${d.nx%2?'scale(1 -1)':''}`
+          this.tf = function(d) {return `translate(${this.cpoint[0]*d.nx} ${d.ny+d.nx%2}) ${d.nx%2?'scale(1 -1)':''}`}
         },
         rectangular_b: function() {
           assign(this, new wallpapers.p1.rectangular())
           this.edgeTfs = () => [['', `translate(-${this.cpoint[0]} 0)`], ['', `translate(${this.cpoint[0]} -1) scale(-1 1)`]],
-          this.tf = d => `translate(${this.cpoint[0]*(d.nx+d.ny%2)} ${d.ny}) ${d.ny%2?'scale(-1 1)':''}`
+          this.tf = function(d) {return `translate(${this.cpoint[0]*(d.nx+d.ny%2)} ${d.ny}) ${d.ny%2?'scale(-1 1)':''}`}
         },
       },
       cm: {
@@ -293,14 +301,14 @@
           assign(this, new wallpapers.p1.square())
           this.edgeEnds = [[1,2]]
           this.edgeTfs = () => [['', 'translate(-1 0)', 'scale(-1 1) rotate(-90 0 1)', 'scale(-1 1) rotate(-90 0.5 1.5)']]
-          this.tf = d => `translate(${d.nx} ${d.ny})`
+          this.tf = function(d) {return `translate(${d.nx} ${d.ny})`}
         },
         hexagonal_a: function() {
           assign(this, new wallpapers.p1.hexagonal())
           this.edgeEnds = [[1,2]]
           this.edgeTfs = function () {let x=this.cpoint[0];
             return [['', `translate(-${x/2}  0.5)`, `scale(-1 1) translate(-${x} 0)`, `scale(-1 1) translate(-${x*1.5}  0.5)`]]}
-          this.tf = d => `translate(${d.nx*this.cpoint[0]/2} ${d.ny + (d.nx%2)/2})`
+          this.tf = function(d) {return `translate(${d.nx*this.cpoint[0]/2} ${d.ny + (d.nx%2)/2})`}
         },
         hexagonal_b: function() {
           assign(this, new wallpapers.cm.hexagonal_a())
@@ -323,14 +331,14 @@
           this.edgeEnds = [[3,4],[4,5]]
           this.edgeTfs = () => [['', 'rotate(180 1 0.5)', 'scale(-1 1) translate(-1 0)', 'scale(-1 1) rotate(180 0.5 0.5)'],
             ['', 'translate(0 -1)', 'scale(-1 1) translate(-1 0)', 'scale(-1 1) translate(-1 -1)']]
-          this.tf = d => `translate(${d.nx} ${d.ny}) rotate(${(d.nx)%2 * 180} 0.5 0.5)`
+          this.tf = function(d) {return `translate(${d.nx} ${d.ny}) rotate(${(d.nx)%2 * 180} 0.5 0.5)`}
         },
         square_b: function() { // horizontal mirror
           assign(this, new wallpapers.p2.square())
           this.edgeEnds = [[3,4],[4,5]]
           this.edgeTfs = () => [['', 'translate(-1 0)', 'scale(1 -1) translate(0 -1)', 'scale(1 -1) translate(-1 -1)'],
             ['', 'rotate(180 0.5 1)', 'scale(1 -1) translate(0 -1)', 'scale(1 -1) rotate(180 0.5 0.5)']]
-          this.tf = d => `translate(${d.nx} ${d.ny}) rotate(${(d.ny)%2 * 180} 0.5 0.5)`
+          this.tf = function(d) {return `translate(${d.nx} ${d.ny}) rotate(${(d.ny)%2 * 180} 0.5 0.5)`}
         },
         rectangular_a: function() { // vertical mirror
           assign(this, new wallpapers.p2.rectangular())
@@ -338,7 +346,7 @@
           this.edgeTfs = () => {let x = this.cpoint[0];
             return [['', `rotate(180 ${x} 0.5)`, `scale(-1 1) translate(-${x} 0)`, `scale(-1 1) rotate(180 ${x/2} 0.5)`],
                     ['', 'translate(0 -1)', `scale(-1 1) translate(-${x} 0)`, `scale(-1 1) translate(-${x} -1)`]]}
-          this.tf = d => `translate(${d.nx*this.cpoint[0]} ${d.ny}) rotate(${(d.nx)%2 * 180} ${this.cpoint[0]/2} 0.5)`
+          this.tf = function(d) {return `translate(${d.nx*this.cpoint[0]} ${d.ny}) rotate(${(d.nx)%2 * 180} ${this.cpoint[0]/2} 0.5)`}
         },
         rectangular_b: function() { // horizontal mirror
           assign(this, new wallpapers.p2.rectangular())
@@ -346,20 +354,20 @@
           this.edgeTfs = () => {let x = this.cpoint[0];
             return [['', `translate(-${x} 0)`, `scale(1 -1) translate(0 -1)`, `scale(1 -1) translate(-${x} -1)`],
                     ['', `rotate(180 ${x/2} 1)`, `scale(1 -1) translate(0 -1)`, `scale(1 -1) rotate(180 ${x/2} 0.5)`]]}
-          this.tf = d => `translate(${d.nx*this.cpoint[0]} ${d.ny}) rotate(${(d.ny)%2 * 180} ${this.cpoint[0]/2} 0.5)`
+          this.tf = function(d) {return `translate(${d.nx*this.cpoint[0]} ${d.ny}) rotate(${(d.ny)%2 * 180} ${this.cpoint[0]/2} 0.5)`}
         }
       },
       pgg: {
         square: function() {
           assign(this, new wallpapers.p1.square())
           this.edgeTfs = () => [['', 'translate(-1 1) scale(1 -1)'], ['', 'translate(1 -1) scale(-1 1)']]
-          this.tf = d => {let xpar = d.nx%2; let ypar = d.ny%2;
+          this.tf = function(d) {let xpar = d.nx%2; let ypar = d.ny%2;
             return `translate(${d.nx+ypar} ${d.ny+xpar}) scale(${1-2*ypar} ${1-2*xpar})`}
         },
         rectangular: function() {
           assign(this, new wallpapers.p1.rectangular())
           this.edgeTfs = () => [['', `translate(-${this.cpoint[0]} 1) scale(1 -1)`], ['', `translate(${this.cpoint[0]} -1) scale(-1 1)`]]
-          this.tf = d => {let xpar = d.nx%2; let ypar = d.ny%2;
+          this.tf = function(d) {let xpar = d.nx%2; let ypar = d.ny%2;
             return `translate(${(d.nx+ypar)*this.cpoint[0]} ${d.ny+xpar}) scale(${1-2*ypar} ${1-2*xpar})`}
         }
       },
@@ -369,7 +377,7 @@
           this.edgeEnds = [[3,4]]
           this.edgeTfs = () => [['', 'rotate(180 0.5 0.5)', 'rotate(180 1 0.5)', 'translate(-1 0)',
             'scale(-1 1) rotate(-90 0.5 1.5)', 'scale(1 -1) rotate(-90)', ' scale(-1 1) rotate(-90 0 1)', 'scale(-1 1) rotate(90 0.5 -0.5)']]
-          this.tf = d => `translate(${d.nx} ${d.ny})`
+          this.tf = function(d) {return `translate(${d.nx} ${d.ny})`}
         },
         hexagonal: function() {
           assign(this, new wallpapers.p2.hexagonal())
@@ -377,7 +385,7 @@
           this.edgeTfs = () => {let x = this.cpoint[0]
             return [['', `rotate(180 ${x*0.75} 0.25)`, `translate(-${x/2} 0.5)`, `rotate(180 ${x/2} 0.5)`,
             `scale(-1 1) translate(-${x} 0)`, `scale(-1 1) translate(-${x*1.5} 0.5)`, `scale(-1 1) rotate(180 ${x*0.25} 0.25)`, `scale(-1 1) rotate(180 0 0.5)`]]}
-          this.tf = d => `translate(${d.nx*this.cpoint[0]/2} ${d.ny + (d.nx%2)/2})`
+          this.tf = function(d) {return `translate(${d.nx*this.cpoint[0]/2} ${d.ny + (d.nx%2)/2})`}
         },
         rhombic: function() {
           assign(this, new wallpapers.cmm.hexagonal())
@@ -397,7 +405,7 @@
           assign(this, new wallpapers.cmm.square())
           this.edgeTfs = () => [['', 'rotate(180 0.5 0.5)', 'rotate(-90 1 1)', 'rotate(90 1 0)',
             'scale(-1 1) translate(-1 0)', 'scale(-1 1) rotate(90 0.5 -0.5)', 'scale(-1 1) rotate(-90 0.5 1.5)', 'scale(-1 1) rotate(180 0 0.5)']]
-          this.tf = d => `translate(${d.nx} ${d.ny}) rotate(${(d.nx+d.ny)%2 * 90} 0.5 0.5)`
+          this.tf = function(d) {return `translate(${d.nx} ${d.ny}) rotate(${(d.nx+d.ny)%2 * 90} 0.5 0.5)`}
         }
       },
       //cpoint not used for hexagons and triangles, 'cause there's no point
@@ -407,7 +415,7 @@
           this.edgeEnds = [[2, 3]]
           this.edgeTfs = () => [['', `rotate(120 ${rt3/4} 0.5)`, `rotate(-120 ${rt3/4} 0.5)`,
             `rotate(120 ${rt3/2} 0.25)`, `translate(${-rt3/2} 0)`,`rotate(-120 ${rt3/2} 0.75)`]]
-          this.tf = d => `translate(${rt3/2 * (d.nx + (d.ny%2)/2)} ${d.ny*0.75})`
+          this.tf = function(d) {return `translate(${rt3/2 * (d.nx + (d.ny%2)/2)} ${d.ny*0.75})`}
         },
         hexagonal_b: function() { // rhombuses
           assign(this, new wallpapers.p1.hexagonal())
@@ -456,7 +464,7 @@
           this.edgeEnds = [[2, 3]]
           this.edgeTfs = () => [['', `rotate(120 ${rt3*third/2} 0.5)`, `rotate(-120 ${rt3*third/2} 0.5)`,
             `rotate(60 ${rt3/2} 0.5)`, `rotate(180 ${rt3/4} 0.75)`, 'rotate(-60 0 1)']]
-          this.tf = d => `translate(${d.nx*rt3/2} ${d.ny/2}) rotate(${((d.nx+d.ny)%2+1)*180} ${rt3/4} 0.5)`
+          this.tf = function(d) {return `translate(${d.nx*rt3/2} ${d.ny/2}) rotate(${((d.nx+d.ny)%2+1)*180} ${rt3/4} 0.5)`}
         }
       },
       p6m: {}
@@ -533,8 +541,7 @@
     rerenderControls()
 
     d3.interval(function(t) { if (shouldRedraw) {
-      if      (shouldRedraw == 4) restart()
-      else if (shouldRedraw == 3) reparameterize()
+      if      (shouldRedraw == 3) restart()
       else if (shouldRedraw == 2) rerender()
       else                        reupdate()
       shouldRedraw = false
@@ -580,6 +587,8 @@
 
       saveArea = d3.select('#saveArea')
 
+      d3.select('#downloadSVG').on('click', downloadSVG)
+
       //big container svg elements
       svg = d3.select('#main')
         .style('width', width)
@@ -597,27 +606,23 @@
       wallpaper = new wallpapers.cm.rhombic_b()
 
       // draw everything
-      reparameterize()
+      restart()
     }
 
-    // enumerate (TODO: add options)
-    function reparameterize() {
+    // TODO: add options to this
+    function restart() {
       parqLocs = d3.cross(d3.range(nw), d3.range(nh), (a, b) => 
       ({
         nx: a,
         ny: b
       }))
-      restart()
-    }
-
-    // wipe the slate
-    function restart() {
       prototiles = [new tile(), new tile()]
       rerenderControls()
     }
 
-    // create
+    // create everything from scratch
     function rerender() {
+      console.log(wallpaper.cpoint)
       edgeGenerator = edgeGeneratorFactory()
       if (parqElements) parqElements.remove()
       parqElements = drawing.selectAll('g')
@@ -625,6 +630,7 @@
         .classed('parq', true)
         .attr('transform', wallpaper.tf.bind(wallpaper))
       edgeTfs = wallpaper.edgeTfs()
+      if (edgeElements) edgeElements.remove()
       edgeElements = parqElements.selectAll('path')
         .data(loc => edgeData(edgeGenerator((clamp(1, loc.nx, nw-2)-1)/(nw-3)))).enter().append('path')
         .classed('edge', true)
@@ -632,7 +638,7 @@
         .attr('d', d => d.data)
     }
 
-    // mutate
+    // when no new elements need to be inserted, we can simply update them
     function reupdate() {
       edgeGenerator = edgeGeneratorFactory()
       if (cmoved) {
@@ -653,11 +659,14 @@
     \**************/
 
     function rerenderControls() {
+      // "prototile" is the term for, not a tile, exactly, but the shape of a tile
       if (prototileElements) prototileElements.remove()
       prototileElements = controls.selectAll('g')
         .data(prototiles).enter().append('g')
         .attr('transform', (d,i,a) => `translate(${i*controlWidth/a.length + 0.25} 0.25) scale(0.5)`)
 
+
+      // the edges. blue edges are "active" and can be manipulated. black edges are determined by blue edges
       if (ptEdgeElements) ptEdgeElements.remove()
       edgeTfs = wallpaper.edgeTfs()
       ptEdgeElements = prototileElements.selectAll('path')
@@ -669,6 +678,7 @@
         .classed('active', true)
         .on('mousedown', addVertex)
 
+      // black points determined by the cpoint. at the ends of each edges, if the transforms are correct
       if(ptAnchorElements) ptAnchorElements.remove()
       ptAnchorElements = prototileElements.selectAll('circle.anchor')
         .data(pt => wallpaper.anchors()).enter().append('circle')
@@ -676,6 +686,7 @@
         .attr('cx', d => d[0])
         .attr('cy', d => d[1])
 
+      // orange point which controls the shape of the unit
       if (ptCpointElements) ptCpointElements.remove()
       if (wallpaper.cpoint) {
         ptCpointElements = prototileElements.selectAll('circle.cpoint')
@@ -688,6 +699,7 @@
           .call(cpointDrag)
       }
 
+      // i'm just using vertices to mean the blue points used to manipulate the edges
       if(ptVertexWrappers) {
         ptVertexWrappers.remove()
         ptVertexElements.remove()
@@ -739,9 +751,11 @@
     }
 
     function load(s) {
+      if (s === undefined) s = saveArea.node().value 
       deformation = JSON.parse(s)
+      console.log()
       wallpaper = new wallpapers[deformation.symmetry][deformation.lattice]()
-      wallpaper.cpoint = deformation.cpoint
+      wallpaper.cpoint = wallpaper.cmove(...deformation.cpoint)
       prototiles = deformation.tiles.map(t => new tile(t))
       rerenderControls()
     }
@@ -795,6 +809,17 @@
         prototiles[k].edges[d.eIndex].splice(i, 1)
       }
       rerenderControls()
+    }
+
+    function downloadSVG() {
+      let prefix = '<?xml version="1.0" standalone="no"?>\n<?xml-stylesheet type="text/css" href="style8.css"?>\n'
+      +'<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">\n'
+      +'<svg xmlns="http://www.w3.org/2000/svg" version="1.1" xmlns:xlink="http://www.w3.org/1999/xlink">\n'
+      let blob = new Blob(
+        [prefix, drawing.node().outerHTML.replace(/(\.\d{4})\d*/g, '$1'),
+        d3.select('style#shortStyle').node().outerHTML, '\n</svg>'], {type: 'image/svg+xml'})
+      console.log(blob)
+      saveAs(blob, 'parquet.svg')
     }
 
     /***************\
@@ -864,7 +889,7 @@
         }
       }
 
-      // replacer does 1.7320508075688772 -> "1.7321"
+      // arrow function does 1.7320508075688772 -> "1.7321"
       result = JSON.stringify(
         {symmetry: symmetry, lattice: lattice.name, cpoint: wallpaper.cpoint, tiles: prototiles.map(t => t.edges)},
         (key, val) => val.toFixed? val.toFixed(4).replace(/[0.](?=0*$)/g,' ') : val,
@@ -891,7 +916,6 @@
     function indexOf(that, e) {
       return Array.prototype.indexOf.call(that, e)
     }
-
   </script>
 </body>
 </html>
