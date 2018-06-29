@@ -6,7 +6,30 @@
 <title>Parquet Definition</title>
 <meta content='D3 parquet deformation creator.' name='description'>
 <style>
-  
+  * {
+    font-family: monospace;
+  }
+
+  /*button styles swiped from google*/
+  td.button {
+      color: #333333;
+      background: #e3e3e3;
+      border: 1px #cacaca solid;
+      padding: 5px 10px;
+      border-radius: 2px;
+      font-weight: bold;
+      font-size: 9pt;
+      outline: none;
+      cursor: default;
+  } td.button:hover {
+      border: 1px #b6b6b6 solid;
+      box-shadow: 1px 1px 1px #dadada;
+      color: #222;
+      background: #e7e7e7;
+  } td.button:active {
+      box-shadow: inset 1px 1px 1px #cfcfcf;   
+  }
+
   #wpWrapper {
     overflow: scroll;
     background-color: black;
@@ -14,7 +37,6 @@
   #wpDisplay {
     margin: 3px;
     border-collapse: collapse;
-    font-family: monospace;
   }
 
   .wpGroup:nth-child(2n-1) {background-color: lightgray;}
@@ -46,6 +68,15 @@
   input:checked ~ .wpHint code {
     background-color: midnightblue;
     border-color: #49f;
+  }
+
+  #buttons {list-style: none}
+  #buttons button {display: table-cell;}
+
+  #saveArea {
+    margin: 10px;
+    resize: vertical;
+    width: 75%;
   }
 
   path.edge {
@@ -89,20 +120,33 @@
 
 </style>
 <body>
-  <table><tr>
-    <td><nobr><div id='wpWrapper'>
-      <table id='wpDisplay'></table>
-    </div></nobr></td>
-    <td><svg id='main'>
-      <g id='drawing'></g>
-      <g id='controls'></g>
-    </svg></td>
-  </tr></table>
+  <table>
+    <tr>
+      <td><nobr><div id='wpWrapper'>
+        <table id='wpDisplay'></table>
+      </div></nobr></td>
+      <td><svg id='main'>
+        <g id='drawing'></g>
+        <g id='controls'></g>
+      </svg></td>
+    </tr>
+    <tr>
+      <td><table id='buttons'><tbody>
+        <tr><td class='button' id='save'>blah</td></tr>
+        <tr><td class='button' id='save'>blah</td></tr>
+        <tr><td class='button' id='save'>blah</td></tr>
+        <tr><td class='button' id='save'>blah</td></tr>
+      </tbody></table></td>
+      <td>
+        <textarea id='saveArea' rows=10></textarea>
+      </td>
+    </tr>
+  </table>
   
   <script src='http://d3js.org/d3.v4.min.js'></script>
   <script src="https://d3js.org/d3-drag.v1.min.js"></script>
   <script src='https://d3js.org/d3-array.v1.min.js'></script>
-  <script src='https://d3js.org/d3-shape.v1.min.js'></script>
+  <script src='https://d3js.org/d3-shape.v1.js'></script>
   <script src="https://d3js.org/d3-interpolate.v1.min.js"></script>
 
   <script>
@@ -113,10 +157,14 @@
     |*               *|
     \*****************/
 
-    var wpDisplay, symmetryElements, latticeElements, svg, drawing, controls // defined by init
+    var wpDisplay, symmetryElements, latticeElements, saveArea,
+      svg, drawing, controls // defined by init
     var shouldRedraw = false
     var cmoved = false
   
+    var liveSave = true
+    var liveDrawing = true
+
     var nw = 23, nh = 11
     var border = 30, width = 1200, controlHeight = 150, controlWidth = width/controlHeight
     var scale = (width - border*2)/(1.5*nw), height = scale*nh + controlHeight + border*3
@@ -124,15 +172,16 @@
     // creates svg path data strings from lists of points
     const edgeHelper = d3.line()
 
+    const assign = Object.assign  
+
     var prototiles // defined by restart
     var parqLocs // defined by reparameterize
     var parqElements, edgeElements // defined by rerender
     var edgeGenerator // defined by rerender AND reupdate
+    var edgeTfs // defined by many things
 
     var prototileElements, ptEdgeElements, ptCpointElements, ptAnchorElements,
       ptVertexWrappers, ptVertexElements // defined by rerenderControls
-
-    var edgeTfs // defined by many things
 
     const rt3 = Math.sqrt(3)
     const third = 1/3
@@ -153,14 +202,14 @@
           this.tf = d => `translate(${d.nx} ${d.ny})`
         },
         rectangular: function() {
-          Object.assign(this, new wallpapers.p1.square())
+          assign(this, new wallpapers.p1.square())
           this.cmove = (x,y) => [x,1]; this.cmove.cursor = 'ew-resize'
           this.anchors = function () {return [[0, 0], [this.cpoint[0], 0], this.cpoint, [0, 1]]}
           this.edgeTfs = () => [['', `translate(-${this.cpoint[0]} 0)`], ['', 'translate(0 -1)']]
           this.tf = d => `translate(${this.cpoint[0]*d.nx} ${d.ny})`
         },
         oblique: function() {
-          Object.assign(this, new wallpapers.p1.square())
+          assign(this, new wallpapers.p1.square())
           this.cmove = (x,y) => [x,y]; this.cmove.cursor = 'move'
           this.anchors = () => [[0, 0], [1, 0], this.cpoint, [this.cpoint[0]-1, this.cpoint[1]]]
           this.edgeTfs = () => [['', 'translate(-1 0)'], ['', `translate(${1-this.cpoint[0]} -${this.cpoint[1]})`]]
@@ -175,7 +224,7 @@
           this.tf = d => `translate(${d.nx*this.cpoint[0]/2} ${d.ny + (d.nx%2)/2})`
         },
         rhombic: function() {
-          Object.assign(this, new wallpapers.p1.hexagonal())
+          assign(this, new wallpapers.p1.hexagonal())
           this.cmove = (x,y) => [x,0.5]; this.cmove.cursor = 'ew-resize'
         }
       },
@@ -189,13 +238,13 @@
           this.tf = d => `translate(${d.nx} ${d.ny}) rotate(${(d.nx+d.ny)%2 * 180} 0.5 0.5)`
         },
         rectangular: function() {
-          Object.assign(this, new wallpapers.p2.square())
+          assign(this, new wallpapers.p2.square())
           this.cmove = (x,y) => [x,1]; this.cmove.cursor = 'ew-resize'
           this.anchors = function () {let x=this.cpoint[0]; return [[0, 0], [x/2, 0], [x, 0], [x, 0.5], [x, 1], [x/2, 1], [0, 1], [0, 0.5]]}
           this.tf = d => `translate(${d.nx*this.cpoint[0]} ${d.ny}) rotate(${(d.nx+d.ny)%2 * 180} ${this.cpoint[0]/2} 0.5)`
         },
         oblique: function() {
-          Object.assign(this, new wallpapers.p2.square())
+          assign(this, new wallpapers.p2.square())
           this.cmove = (x,y) => [x,y]; this.cmove.cursor = 'move'
           this.anchors = () => {let x=this.cpoint[0]; let y=this.cpoint[1];
             return [[0, 0], [0.5, 0], [1, 0], [x/2+0.5, y/2], [x, y], [x-0.5, y], [x-1, y], [(x-1)/2, y/2]]}
@@ -212,79 +261,79 @@
           this.tf = function(d) {return `translate(${d.nx*this.cpoint[0]/2} ${d.ny + (d.nx%2)/2}) rotate(${d.nx%2 * 180} ${this.cpoint[0]/2} 0.5)`}
         },
         rhombic: function() {
-          Object.assign(this, new wallpapers.p2.hexagonal())
+          assign(this, new wallpapers.p2.hexagonal())
           this.cmove = (x,y) => [x,0.5]; this.cmove.cursor = 'ew-resize'
         }
       },
       pm: {},
       pg: {
         square_a: function() {
-          Object.assign(this, new wallpapers.p1.square())
+          assign(this, new wallpapers.p1.square())
           this.edgeTfs = () => [['', 'translate(-1 1) scale(1 -1)'], ['', 'translate(0 -1)']],
           this.tf = d => `translate(${d.nx} ${d.ny+d.nx%2}) ${d.nx%2?'scale(1 -1)':''}`
         },
         square_b: function() {
-          Object.assign(this, new wallpapers.p1.square())
+          assign(this, new wallpapers.p1.square())
           this.edgeTfs = () => [['', 'translate(-1 0)'], ['', 'translate(1 -1) scale(-1 1)']],
           this.tf = d => `translate(${d.nx+d.ny%2} ${d.ny}) ${d.ny%2?'scale(-1 1)':''}`
         },
         rectangular_a: function() {
-          Object.assign(this, new wallpapers.p1.rectangular())
+          assign(this, new wallpapers.p1.rectangular())
           this.edgeTfs = () => [['', `translate(-${this.cpoint[0]} 1) scale(1 -1)`], ['', 'translate(0 -1)']],
           this.tf = d => `translate(${this.cpoint[0]*d.nx} ${d.ny+d.nx%2}) ${d.nx%2?'scale(1 -1)':''}`
         },
         rectangular_b: function() {
-          Object.assign(this, new wallpapers.p1.rectangular())
+          assign(this, new wallpapers.p1.rectangular())
           this.edgeTfs = () => [['', `translate(-${this.cpoint[0]} 0)`], ['', `translate(${this.cpoint[0]} -1) scale(-1 1)`]],
           this.tf = d => `translate(${this.cpoint[0]*(d.nx+d.ny%2)} ${d.ny}) ${d.ny%2?'scale(-1 1)':''}`
         },
       },
       cm: {
         square: function() {
-          Object.assign(this, new wallpapers.p1.square())
+          assign(this, new wallpapers.p1.square())
           this.edgeEnds = [[1,2]]
           this.edgeTfs = () => [['', 'translate(-1 0)', 'scale(-1 1) rotate(-90 0 1)', 'scale(-1 1) rotate(-90 0.5 1.5)']]
           this.tf = d => `translate(${d.nx} ${d.ny})`
         },
         hexagonal_a: function() {
-          Object.assign(this, new wallpapers.p1.hexagonal())
+          assign(this, new wallpapers.p1.hexagonal())
           this.edgeEnds = [[1,2]]
           this.edgeTfs = function () {let x=this.cpoint[0];
             return [['', `translate(-${x/2}  0.5)`, `scale(-1 1) translate(-${x} 0)`, `scale(-1 1) translate(-${x*1.5}  0.5)`]]}
           this.tf = d => `translate(${d.nx*this.cpoint[0]/2} ${d.ny + (d.nx%2)/2})`
         },
         hexagonal_b: function() {
-          Object.assign(this, new wallpapers.cm.hexagonal_a())
+          assign(this, new wallpapers.cm.hexagonal_a())
           this.edgeTfs = function () {let x=this.cpoint[0];
             return [['', `translate(-${x/2}  0.5)`, `scale(1 -1) translate(0 -1)`, `scale(1 -1) translate(-${x/2}  -0.5)`]]}
         },
         rhombic_a: function() {
-          Object.assign(this, new wallpapers.cm.hexagonal_a())
+          assign(this, new wallpapers.cm.hexagonal_a())
           this.cmove = (x,y) => [x,0.5]; this.cmove.cursor = 'ew-resize'
         },
         rhombic_b: function() {
-          Object.assign(this, new wallpapers.cm.hexagonal_b())
+          assign(this, new wallpapers.cm.hexagonal_b())
           this.cmove = (x,y) => [x,0.5]; this.cmove.cursor = 'ew-resize'
         }
       },
       pmm: {},
       pmg: {
         square_a: function() { // vertical mirror
-          Object.assign(this, new wallpapers.p2.square())
+          assign(this, new wallpapers.p2.square())
           this.edgeEnds = [[3,4],[4,5]]
           this.edgeTfs = () => [['', 'rotate(180 1 0.5)', 'scale(-1 1) translate(-1 0)', 'scale(-1 1) rotate(180 0.5 0.5)'],
             ['', 'translate(0 -1)', 'scale(-1 1) translate(-1 0)', 'scale(-1 1) translate(-1 -1)']]
           this.tf = d => `translate(${d.nx} ${d.ny}) rotate(${(d.nx)%2 * 180} 0.5 0.5)`
         },
         square_b: function() { // horizontal mirror
-          Object.assign(this, new wallpapers.p2.square())
+          assign(this, new wallpapers.p2.square())
           this.edgeEnds = [[3,4],[4,5]]
           this.edgeTfs = () => [['', 'translate(-1 0)', 'scale(1 -1) translate(0 -1)', 'scale(1 -1) translate(-1 -1)'],
             ['', 'rotate(180 0.5 1)', 'scale(1 -1) translate(0 -1)', 'scale(1 -1) rotate(180 0.5 0.5)']]
           this.tf = d => `translate(${d.nx} ${d.ny}) rotate(${(d.ny)%2 * 180} 0.5 0.5)`
         },
         rectangular_a: function() { // vertical mirror
-          Object.assign(this, new wallpapers.p2.rectangular())
+          assign(this, new wallpapers.p2.rectangular())
           this.edgeEnds = [[3,4],[4,5]]
           this.edgeTfs = () => {let x = this.cpoint[0];
             return [['', `rotate(180 ${x} 0.5)`, `scale(-1 1) translate(-${x} 0)`, `scale(-1 1) rotate(180 ${x/2} 0.5)`],
@@ -292,7 +341,7 @@
           this.tf = d => `translate(${d.nx*this.cpoint[0]} ${d.ny}) rotate(${(d.nx)%2 * 180} ${this.cpoint[0]/2} 0.5)`
         },
         rectangular_b: function() { // horizontal mirror
-          Object.assign(this, new wallpapers.p2.rectangular())
+          assign(this, new wallpapers.p2.rectangular())
           this.edgeEnds = [[3,4],[4,5]]
           this.edgeTfs = () => {let x = this.cpoint[0];
             return [['', `translate(-${x} 0)`, `scale(1 -1) translate(0 -1)`, `scale(1 -1) translate(-${x} -1)`],
@@ -302,13 +351,13 @@
       },
       pgg: {
         square: function() {
-          Object.assign(this, new wallpapers.p1.square())
+          assign(this, new wallpapers.p1.square())
           this.edgeTfs = () => [['', 'translate(-1 1) scale(1 -1)'], ['', 'translate(1 -1) scale(-1 1)']]
           this.tf = d => {let xpar = d.nx%2; let ypar = d.ny%2;
             return `translate(${d.nx+ypar} ${d.ny+xpar}) scale(${1-2*ypar} ${1-2*xpar})`}
         },
         rectangular: function() {
-          Object.assign(this, new wallpapers.p1.rectangular())
+          assign(this, new wallpapers.p1.rectangular())
           this.edgeTfs = () => [['', `translate(-${this.cpoint[0]} 1) scale(1 -1)`], ['', `translate(${this.cpoint[0]} -1) scale(-1 1)`]]
           this.tf = d => {let xpar = d.nx%2; let ypar = d.ny%2;
             return `translate(${(d.nx+ypar)*this.cpoint[0]} ${d.ny+xpar}) scale(${1-2*ypar} ${1-2*xpar})`}
@@ -316,14 +365,14 @@
       },
       cmm: {
         square: function () {
-          Object.assign(this, new wallpapers.p2.square())
+          assign(this, new wallpapers.p2.square())
           this.edgeEnds = [[3,4]]
           this.edgeTfs = () => [['', 'rotate(180 0.5 0.5)', 'rotate(180 1 0.5)', 'translate(-1 0)',
             'scale(-1 1) rotate(-90 0.5 1.5)', 'scale(1 -1) rotate(-90)', ' scale(-1 1) rotate(-90 0 1)', 'scale(-1 1) rotate(90 0.5 -0.5)']]
           this.tf = d => `translate(${d.nx} ${d.ny})`
         },
         hexagonal: function() {
-          Object.assign(this, new wallpapers.p2.hexagonal())
+          assign(this, new wallpapers.p2.hexagonal())
           this.edgeEnds = [[3,4]]
           this.edgeTfs = () => {let x = this.cpoint[0]
             return [['', `rotate(180 ${x*0.75} 0.25)`, `translate(-${x/2} 0.5)`, `rotate(180 ${x/2} 0.5)`,
@@ -331,13 +380,13 @@
           this.tf = d => `translate(${d.nx*this.cpoint[0]/2} ${d.ny + (d.nx%2)/2})`
         },
         rhombic: function() {
-          Object.assign(this, new wallpapers.cmm.hexagonal())
+          assign(this, new wallpapers.cmm.hexagonal())
           this.cmove = (x,y) => [x,0.5]; this.cmove.cursor = 'ew-resize'
         }
       },
       p4: {
         square: function() {
-          Object.assign(this, new wallpapers.cmm.square())
+          assign(this, new wallpapers.cmm.square())
           this.edgeTfs = () => [['', 'rotate(90 0.5 0.5)', 'rotate(180 0.5 0.5)', 'rotate(270 0.5 0.5)',
             'rotate(180 1 0.5)', 'rotate(-90 1 1)', 'translate(-1, 0)', 'rotate(90 1 0)']]
         }
@@ -345,7 +394,7 @@
       p4m: {},
       p4g: {
         square: function() {
-          Object.assign(this, new wallpapers.cmm.square())
+          assign(this, new wallpapers.cmm.square())
           this.edgeTfs = () => [['', 'rotate(180 0.5 0.5)', 'rotate(-90 1 1)', 'rotate(90 1 0)',
             'scale(-1 1) translate(-1 0)', 'scale(-1 1) rotate(90 0.5 -0.5)', 'scale(-1 1) rotate(-90 0.5 1.5)', 'scale(-1 1) rotate(180 0 0.5)']]
           this.tf = d => `translate(${d.nx} ${d.ny}) rotate(${(d.nx+d.ny)%2 * 90} 0.5 0.5)`
@@ -361,7 +410,7 @@
           this.tf = d => `translate(${rt3/2 * (d.nx + (d.ny%2)/2)} ${d.ny*0.75})`
         },
         hexagonal_b: function() { // rhombuses
-          Object.assign(this, new wallpapers.p1.hexagonal())
+          assign(this, new wallpapers.p1.hexagonal())
           this.edgeTfs = () => [['', `rotate(120 ${rt3/2} 0)`], ['', `rotate(-120 ${rt3/2} 1)`]]
           this.tf = function (d) { // sorry about the mess..
             const y = d.nx%2 ? d.ny : d.ny%3 == 2 ? d.ny : d.ny + 1 - 2*d.ny%3
@@ -373,9 +422,9 @@
       p3m1: {},
       p31m: {
         hexagonal_a: function() { // hexagons
-          Object.assign(this, new wallpapers.p3.hexagonal_a())
+          assign(this, new wallpapers.p3.hexagonal_a())
           this.anchors = () => [[    0, 0.25], [rt3/8, 0.125], [rt3/4, 0], [rt3*0.375, 0.125], [rt3/2, 0.25], [rt3/2, 0.5],
-                                [rt3/2, 0.75], [rt3/8, 0.875], [rt3/4, 1], [rt3*0.125, 0.875], [    0, 0.75], [    0, 0.5]]
+                                [rt3/2, 0.75], [rt3*0.375, 0.875], [rt3/4, 1], [rt3*0.125, 0.875], [    0, 0.75], [    0, 0.5]]
           this.edgeEnds = [[5, 6]]
           const oldEdgeTfs = this.edgeTfs()[0]
           this.edgeTfs = () => [oldEdgeTfs.concat(
@@ -384,14 +433,14 @@
           )]
         },
         hexagonal_b: function() { // rhombuses
-          Object.assign(this, new wallpapers.p3.hexagonal_b())
+          assign(this, new wallpapers.p3.hexagonal_b())
           this.edgeEnds = [[2,3]]
           this.edgeTfs = () => [['', `rotate(-120 ${rt3/2} 1)`, `scale(-1, 1) rotate(60 ${rt3/2} -1)`, 'scale(-1, 1) rotate(180 0 0.5)']]
         }
       },
       p6: {
         hexagonal_a: function() { // hexagons
-          Object.assign(this, new wallpapers.p31m.hexagonal_a())
+          assign(this, new wallpapers.p31m.hexagonal_a())
           oldEdgeTfs = this.edgeTfs()[0].slice(0,6)
           this.edgeTfs = () => [oldEdgeTfs.concat([
             `rotate(60 ${rt3/4} 0.5)`, `rotate(180 ${rt3/4} 0.5)`, `rotate(-60 ${rt3/4} 0.5)`,
@@ -399,7 +448,7 @@
           ])]
         },
         hexagonal_b: function() { // rhombuses
-          Object.assign(this, new wallpapers.p31m.hexagonal_b())
+          assign(this, new wallpapers.p31m.hexagonal_b())
           this.edgeTfs = () => [['', `rotate(-120 ${rt3/2} 1)`, `rotate(180 ${rt3/2} 0.5)`, `rotate(60 ${rt3} 0.5)`]]
         },
         hexagonal_c: function() { // triangles
@@ -416,42 +465,42 @@
     // for display
     const wpData = [
       [
-        {variant: wallpapers.p1.rectangular, symmetry: 'p1', lattice: 'Rectangular', hint: '[ o ]'},
-        {variant: wallpapers.p1.oblique, symmetry: 'p1', lattice: 'Oblique', hint: '\\ o \\'},
-        {variant: wallpapers.p1.rhombic, symmetry: 'p1', lattice: 'Rhombic', hint: '< o >'}
+        {constructor: wallpapers.p1.rectangular, symmetry: 'p1', lattice: 'Rectangular', hint: '[ o ]'},
+        {constructor: wallpapers.p1.oblique, symmetry: 'p1', lattice: 'Oblique', hint: '\\ o \\'},
+        {constructor: wallpapers.p1.rhombic, symmetry: 'p1', lattice: 'Rhombic', hint: '< o >'}
       ], [
-        {variant: wallpapers.p2.rectangular, symmetry: 'p2', lattice: 'Rectangular', hint: '[ ~ ]'},
-        {variant: wallpapers.p2.oblique, symmetry: 'p2', lattice: 'Oblique', hint: '\\ ~ \\'},
-        {variant: wallpapers.p2.rhombic, symmetry: 'p2', lattice: 'Rhombic', hint: '< ~ >'}
+        {constructor: wallpapers.p2.rectangular, symmetry: 'p2', lattice: 'Rectangular', hint: '[ ~ ]'},
+        {constructor: wallpapers.p2.oblique, symmetry: 'p2', lattice: 'Oblique', hint: '\\ ~ \\'},
+        {constructor: wallpapers.p2.rhombic, symmetry: 'p2', lattice: 'Rhombic', hint: '< ~ >'}
       ], [
-        {variant: wallpapers.pg.rectangular_a, symmetry: 'pg', lattice: 'Rectangular A', hint: '[ Z ]'},
-        {variant: wallpapers.pg.rectangular_b, symmetry: 'pg', lattice: 'Rectangular B', hint: '[ N ]'}
+        {constructor: wallpapers.pg.rectangular_a, symmetry: 'pg', lattice: 'Rectangular A', hint: '[ Z ]'},
+        {constructor: wallpapers.pg.rectangular_b, symmetry: 'pg', lattice: 'Rectangular B', hint: '[ N ]'}
       ], [
-        {variant: wallpapers.cm.square, symmetry: 'cm', lattice: 'Square', hint: ' [/] '},
-        {variant: wallpapers.cm.rhombic_a, symmetry: 'cm', lattice: 'Rhombic A', hint: '< T >'},
-        {variant: wallpapers.cm.rhombic_b, symmetry: 'cm', lattice: 'Rhombic B', hint: '< E >'}
+        {constructor: wallpapers.cm.square, symmetry: 'cm', lattice: 'Square', hint: ' [/] '},
+        {constructor: wallpapers.cm.rhombic_a, symmetry: 'cm', lattice: 'Rhombic A', hint: '< T >'},
+        {constructor: wallpapers.cm.rhombic_b, symmetry: 'cm', lattice: 'Rhombic B', hint: '< E >'}
       ], [
-        {variant: wallpapers.pmg.rectangular_a, symmetry: 'pmg', lattice: 'Rectangular A', hint: '[ T ]'},
-        {variant: wallpapers.pmg.rectangular_b, symmetry: 'pmg', lattice: 'Rectangular B', hint: '[ E ]'}
+        {constructor: wallpapers.pmg.rectangular_a, symmetry: 'pmg', lattice: 'Rectangular A', hint: '[ T ]'},
+        {constructor: wallpapers.pmg.rectangular_b, symmetry: 'pmg', lattice: 'Rectangular B', hint: '[ E ]'}
       ], [
-        {variant: wallpapers.pgg.rectangular, symmetry: 'pgg', lattice: 'Rectangular', hint: '[ % ]'}
+        {constructor: wallpapers.pgg.rectangular, symmetry: 'pgg', lattice: 'Rectangular', hint: '[ % ]'}
       ], [
-        {variant: wallpapers.cmm.square, symmetry: 'cmm', lattice: 'Square', hint: ' [X] '},
-        {variant: wallpapers.cmm.rhombic, symmetry: 'cmm', lattice: 'Rhombic', hint: '< X >'}
+        {constructor: wallpapers.cmm.square, symmetry: 'cmm', lattice: 'Square', hint: ' [X] '},
+        {constructor: wallpapers.cmm.rhombic, symmetry: 'cmm', lattice: 'Rhombic', hint: '< X >'}
       ], [
-        {variant: wallpapers.p4.square, symmetry: 'p4', lattice: 'Square', hint: ' [+] '}
+        {constructor: wallpapers.p4.square, symmetry: 'p4', lattice: 'Square', hint: ' [+] '}
       ], [
-        {variant: wallpapers.p4g.square, symmetry: 'p4g', lattice: 'Square', hint: ' [H] '}
+        {constructor: wallpapers.p4g.square, symmetry: 'p4g', lattice: 'Square', hint: ' [H] '}
       ], [
-        {variant: wallpapers.p3.hexagonal_a, symmetry: 'p3', lattice: 'Hexagonal A', hint: '〔 〕'},
-        {variant: wallpapers.p3.hexagonal_b, symmetry: 'p3', lattice: 'Hexagonal B', hint: ' < > '}
+        {constructor: wallpapers.p3.hexagonal_a, symmetry: 'p3', lattice: 'Hexagonal A', hint: '〔 〕'},
+        {constructor: wallpapers.p3.hexagonal_b, symmetry: 'p3', lattice: 'Hexagonal B', hint: ' < > '}
       ], [
-        {variant: wallpapers.p31m.hexagonal_a, symmetry: 'p31m', lattice: 'Hexagonal A', hint: '〔Y〕'},
-        {variant: wallpapers.p31m.hexagonal_b, symmetry: 'p31m', lattice: 'Hexagonal B', hint: ' <Y> '}
+        {constructor: wallpapers.p31m.hexagonal_a, symmetry: 'p31m', lattice: 'Hexagonal A', hint: '〔Y〕'},
+        {constructor: wallpapers.p31m.hexagonal_b, symmetry: 'p31m', lattice: 'Hexagonal B', hint: ' <Y> '}
       ], [
-        {variant: wallpapers.p6.hexagonal_a, symmetry: 'p6', lattice: 'Hexagonal A', hint: '〔*〕'},
-        {variant: wallpapers.p6.hexagonal_b, symmetry: 'p6', lattice: 'Hexagonal B', hint: ' <*> '},
-        {variant: wallpapers.p6.hexagonal_c, symmetry: 'p6', lattice: 'Hexagonal C', hint: ' |*> '}
+        {constructor: wallpapers.p6.hexagonal_a, symmetry: 'p6', lattice: 'Hexagonal A', hint: '〔*〕'},
+        {constructor: wallpapers.p6.hexagonal_b, symmetry: 'p6', lattice: 'Hexagonal B', hint: ' <*> '},
+        {constructor: wallpapers.p6.hexagonal_c, symmetry: 'p6', lattice: 'Hexagonal C', hint: ' |*> '}
       ]
     ]
 
@@ -476,64 +525,10 @@
 
     const cpointDrag = d3.drag().on('drag', dragCpoint)
     const vertexDrag = d3.drag().on('drag', dragVertex)
-    const vertexCreate = d3.drag().on('drag', dragVertex).subject
 
     var wallpaper
 
     init()
-
-    {
-      // testing p1.rhombic
-      // prototiles[0].edges = [[[rt3/2, 0.5]], [[rt3/2, 0.5]]]
-      // prototiles[1].edges = [[[rt3,0]], [[rt3, 1]]]
-
-      // testing pmg.rectangular_a or pmg.rectangular_b
-      // wallpaper.cpoint = [1.5,1]
-      // prototiles[0].edges = [[[1.85,0.9]],[[1.4,0.75]]]
-      // prototiles[1].edges = [[[1.15,0.9]],[[1.4,1.25]]]
-
-      // testing pgg.square
-      // prototiles[0].edges = [[[1.25,0.9]],[[0.9,0.75]]]
-      // prototiles[1].edges = [[[0.75,0.9]],[[0.9,1.25]]]
-
-      // testing cm.square
-      // prototiles[0].edges = [[[1.2,0.4],[1,0.5],[1.4,0.6]]]
-      // prototiles[1].edges = [[[0.8,0.4],[1,0.5],[0.6,0.6]]]
-      // testing cm.rhombic
-      // prototiles[0].edges = [[[rt3*0.7, 0.1],[rt3*0.75, 0.25],[rt3*0.9, 0.05]]]
-      // prototiles[1].edges = [[[rt3*0.55, 0.3],[rt3*0.75, 0.25],[rt3*0.75, 0.4]]]
-
-      // testing cmm.square
-      // prototiles[0].edges = [[[0.8,0.5]]]
-      // prototiles[1].edges = [[[1.2,0.8]]]
-      // testing cmm.rhombic
-      // prototiles[0].edges = [[[1.5,0.4]]]
-      // prototiles[1].edges = [[[1.4,0.5]]]
-
-      // testing p4g.square
-      // prototiles[0].edges = [[[0.5,1]]]
-      // prototiles[1].edges = [[[1.25,0.75]]]
-
-      // testing p3.hexagonal_a
-      // prototiles[0].edges = [[[1, 0.25]]]
-      // prototiles[1].edges = [[[rt3/4, 0.5]]]
-
-      // testing p3.hexagonal_b
-      // prototiles[0].edges = [[[rt3*0.75, 0],[rt3, 0.25]],[[rt3*0.5,0.5]]]
-      // prototiles[1].edges = [[[rt3*0.5, 0.25],[rt3*0.75, 0.5]],[[rt3,1]]]
-
-      // testing p31m.hexagonal_a or p6.hexagonal_a
-      // prototiles[0].edges = [[[1, 0.75]]]
-      // prototiles[1].edges = [[[rt3*0.32, 0.55]]]
-
-      // testing p31m.hexagonal_b or p6.hexagonal_b
-      // prototiles[0].edges = [[[rt3*0.5,0.5]]]
-      // prototiles[1].edges = [[[rt3*0.84,1]]]
-
-      // testing p6.hexagonal_c
-      // prototiles[0].edges = [[[rt3/2,1]]]
-      // prototiles[1].edges = [[[rt3/4,0.25]]]
-    }
 
     rerenderControls()
 
@@ -553,6 +548,7 @@
 
     // initiate
     function init() {
+      // symmetry sidebar
       wpDisplay = d3.select('#wpDisplay').datum(wpData)
       symmetryElements = wpDisplay.selectAll('tbody')
         .data(d => d).enter().append('tbody')
@@ -561,24 +557,30 @@
         .data(d => d).enter().append('label')
         .classed('wpVariant', true)
         .attr('for', d => d.symmetry+d.lattice.replace(/ /g, ''))
-        .on('click', d => {wallpaper = new d.variant(); restart()})
-
-      latticeElements.append('input')
+        .on('click', d => {wallpaper = new d.constructor(); restart()})
+      latticeElements
+        .append('input')
         .attr('type', 'radio')
         .attr('name', 'wallpaper')
         .attr('id', d => d.symmetry+d.lattice.replace(/ /g, ''))
-      latticeElements.append('td')
+      latticeElements
+        .append('td')
         .classed('wpSymmetry', true)
         .append('label')
         .text(d => d.symmetry)
-      latticeElements.append('td')
+      latticeElements
+        .append('td')
         .classed('wpLattice', true)
         .text(d => d.lattice)
-      latticeElements.append('td')
+      latticeElements
+        .append('td')
         .classed('wpHint', true)
         .append('code')
         .text(d => d.hint)
 
+      saveArea = d3.select('#saveArea')
+
+      //big container svg elements
       svg = d3.select('#main')
         .style('width', width)
         .style('height', height)
@@ -587,12 +589,14 @@
       controls = d3.select('#controls')
         .attr('transform', `translate(${border} ${height - controlHeight - border}) scale(${controlHeight})`)
 
+      //pick initial values
       latticeElements
         .filter(d => d.symmetry == 'cm' && d.lattice == 'Rhombic B')
         .select('input')
         .node().checked = true
       wallpaper = new wallpapers.cm.rhombic_b()
 
+      // draw everything
       reparameterize()
     }
 
@@ -657,7 +661,7 @@
       if (ptEdgeElements) ptEdgeElements.remove()
       edgeTfs = wallpaper.edgeTfs()
       ptEdgeElements = prototileElements.selectAll('path')
-        .data(ptile => edgeData(ptile.fullEdges())).enter().append('path')
+        .data((pt, i) => edgeData(pt.fullEdges(), i)).enter().append('path')
         .classed('protoedge', true)
         .attr('transform', d => d.tf)
         .attr('d', d => d.data)
@@ -684,24 +688,30 @@
           .call(cpointDrag)
       }
 
-      if(ptVertexWrappers) ptVertexWrappers.remove()
+      if(ptVertexWrappers) {
+        ptVertexWrappers.remove()
+        ptVertexElements.remove()
+      }
       ptVertexWrappers = prototileElements.selectAll('g')
-        .data(pt => pt.edges).enter().append('g')
-        .on('contextmenu', deleteVertex)
+        .data((pt, i) => pt.edges.map(e => assign(e, {ptIndex: i}))).enter().append('g')
       ptVertexElements = ptVertexWrappers.selectAll('circle.vertex')
-        .data(e => e).enter().append('circle')
+        .data(e => e.map(v => assign(v, {ptIndex: e.ptIndex}))).enter().append('circle')
+        .each(function(d) {d.eIndex = ptVertexWrappers._groups[d.ptIndex].indexOf(this.parentNode)})
         .classed('vertex', true)
         .attr('cx', d => d[0])
         .attr('cy', d => d[1])
+        .on('contextmenu', deleteVertex)
+        .on('click', 'selectVertex')
         .call(vertexDrag)
 
-      shouldRedraw = Math.max(2, shouldRedraw)
+      if (liveDrawing) shouldRedraw = Math.max(2, shouldRedraw)
+      if (liveSave) save()
     }
 
     function reupdateControls() {
       edgeTfs = wallpaper.edgeTfs()
       ptEdgeElements
-        .data(ptile => edgeData(ptile.fullEdges()))
+        .data((pt, i) => edgeData(pt.fullEdges(), i))
         .attr('transform', d => d.tf)
         .attr('d', d => d.data)
 
@@ -712,17 +722,20 @@
 
       if (wallpaper.cpoint) {
         ptCpointElements
-          .data(pt => [wallpaper.cpoint])
           .attr('cx', wallpaper.cpoint[0])
           .attr('cy', wallpaper.cpoint[1])
       }
 
       ptVertexElements
-        .data(e => e)
         .attr('cx', d => d[0])
         .attr('cy', d => d[1])
 
-      shouldRedraw = Math.max(1, shouldRedraw)
+      if (liveDrawing) shouldRedraw = Math.max(1, shouldRedraw)
+      if (liveSave) save()
+    }
+
+    function save() {
+      saveArea.node().value = saveString()
     }
 
     function load(s) {
@@ -754,19 +767,18 @@
     function addVertex(d, i, g) {
       const point = clientToLocal(d3.event, this)
       const dist = distanceAlongPath(this, clientToLocal(d3.event, this))
-      const whichTile = indexOf(this.parentNode.parentNode.children, this.parentNode)
-      const edge = prototiles[whichTile].fullEdges()[i]
+      const edge = prototiles[d.ptIndex].fullEdges()[i]
       let j = 0
       while (distanceAlongPath(this, edge[j]) < dist && j < edge.length) j++
       for (let k=0; k < prototiles.length; k++) {
         let fulledge = prototiles[k].fullEdges()[i]
-        let newVertex = k == whichTile?
+        let newVertex = k == d.ptIndex?
           [point.x, point.y]:
           d3.interpolate(fulledge[j-1],fulledge[j])(0.5)
         prototiles[k].edges[i].splice(j-1,0,newVertex)
       }
       rerenderControls()
-      let newVertex = ptVertexWrappers._groups[whichTile][i].children[j-1]
+      let newVertex = ptVertexWrappers._groups[d.ptIndex][i].children[j-1]
       d3.select(newVertex).dispatch('mouseup')
       // selection.dispatch creates a custom event which doesn't have the "view" property
       // d3.drag requires event.view, so we do this "properly" instead
@@ -779,10 +791,8 @@
     function deleteVertex(d, i, g) {
       let e = d3.event
       e.preventDefault()
-      const whichTile = indexOf(this.parentNode.parentNode.children, this.parentNode)
-      const j = indexOf(e.target.parentNode.children, e.target)
-      for (let k=0; k < prototiles.length; k++){
-        prototiles[k].edges[i].splice(j, 1)
+      for (let k=0; k < prototiles.length; k++) {
+        prototiles[k].edges[d.eIndex].splice(i, 1)
       }
       rerenderControls()
     }
@@ -830,21 +840,22 @@
       return best*delta
     }
 
-    function edgeData(edges) {
+    function edgeData(edges, ptIndex=-1) {
       edges = edges.map(edgeHelper)
       let result = []
       for (let i=0; i<wallpaper.edgeEnds.length; i++) {
         for (let j=0; j<edgeTfs[i].length; j++) {
           result.push({
             tf: edgeTfs[i][j],
-            data: edges[i]
+            data: edges[i],
+            ptIndex: ptIndex
           })
         }
       }
       return result
     }
 
-    function savestring() {
+    function saveString() {
       let lattice = wallpaper.constructor;
       let symmetry
       for (let sym in wallpapers) {
@@ -852,17 +863,25 @@
           symmetry = sym; break
         }
       }
-      return JSON.stringify({
-        symmetry: symmetry,
-        lattice: lattice.name,
-        cpoint: wallpaper.cpoint,
-        tiles: prototiles.map(t => t.edges)
-      }, (key, val) => val.toFixed? val.toFixed(4).replace(/0*$/,'') : val, 2)
-      .replace(/"(\d+(\.\d+)?)"/g, "$1")
-    }
 
-    function prettifySaveString(s) {
-
+      // replacer does 1.7320508075688772 -> "1.7321"
+      result = JSON.stringify(
+        {symmetry: symmetry, lattice: lattice.name, cpoint: wallpaper.cpoint, tiles: prototiles.map(t => t.edges)},
+        (key, val) => val.toFixed? val.toFixed(4).replace(/[0.](?=0*$)/g,' ') : val,
+        2
+      )
+      result = result
+        .replace(/"(-?\d+(\.\d*)? *)"/g, '$1')                          // quoted numbers to actual numbers
+        .replace(/( *)\[\n *(-?\d.*)\n *(-?\d.*)\n *\]/g, '$1[$2 $3]')  // each point to single line
+        .replace(/( {8}.*\n)(?= {8})/g,'$1~').replace(/\n~ */g, ' ')    // all points in each edge to same line
+        .replace(/\n {6}\[\n {8}(.*)\n {6}\]/g, '\n      [$1]')         // each edge to single line
+        .replace(/( {6})(\[\]),\n(?=\1\2)/g, '$1$2, ')                  // consecutive empty edges to same line
+        .replace(/([^\n ]) {7}/g, '$1 ')                                // get rid of extra spaces from previous step
+        .replace(/\n {4}\[\n {6}(.*)\n {4}\]/g, '\n    [$1]')           // "small" tiles to single line
+        .replace(/  \],\n *\[\n/g, '  ], [\n')                          // delimiter between "big" arrays to single line
+        .replace(/{\n(  .*)\n ( .*)\n ( .*)/, '{\n$1$2$3')              // non-"tiles" props to single line
+      // I know it's a lot of junk but it makes the JSONs look super nice so I don't care
+      return result
     }
 
     function clamp (a, val, b) {
