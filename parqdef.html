@@ -139,11 +139,21 @@
     <tr>
       <td><table id='buttons'><tbody>
         <tr>
-          <td class='button' id='downloadSVG'>Download SVG</td>
-          <td><button>?</button></td></tr>
-        <tr><td class='button' id='save'>blah</td></tr>
-        <tr><td class='button' id='save'>blah</td></tr>
-        <tr><td class='button' id='save'>blah</td></tr>
+          <td class='button' id='downloadSVG' colspan=4>Download SVG</td>
+          <td><button class='help'>?</button></td>
+        </tr><tr>
+          <td class='button' id='lockJSON' colspan=3>Lock JSON</td>
+          <td class='button' id='updateJSON'>⟳</td>
+          <td><button class='help'>?</button></td>
+        </tr><tr>
+          <td class='button' id='lockRendering' colspan=3>Lock Rendering</td>
+          <td class='button' id='updateJSON'>⟳</td>
+          <td><button class='help'>?</button></td>
+        </tr><tr>
+          <td class='button' id='save' colspan=2>Save</td>
+          <td class='button' id='lockJson' colspan=2>Load...</td>
+          <td><button class='help'>?</button></td>
+        </tr>
       </tbody></table></td>
       <td>
         <textarea id='saveArea' rows=10></textarea>
@@ -151,7 +161,7 @@
     </tr>
   </table>
   
-  <script src='https://d3js.org/d3.v4.min.js'></script>
+  <script src='http://d3js.org/d3.v4.min.js'></script>
   <script src="https://d3js.org/d3-drag.v1.min.js"></script>
   <script src='https://d3js.org/d3-array.v1.min.js'></script>
   <script src='https://d3js.org/d3-shape.v1.js'></script>
