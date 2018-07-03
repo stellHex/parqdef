@@ -11,7 +11,7 @@
   }
 
   /*button styles swiped from google*/
-  td.button, button {
+  button {
     color: #333333;
     background: #f3f3f3;
     border: 1px #dadada solid;
@@ -23,20 +23,18 @@
     cursor: default;
     user-select: none;
   }
-  td.button:hover, button:hover {
+  button:hover:not(:disabled) {
     border: 1px #c6c6c6 solid;
     box-shadow: 1px 1px 1px #eaeaea;
     color: #222;
     background: #f7f7f7;
   }
-  td.button:active, button:active {
+  button:active {
     box-shadow: inset 1px 1px 1px #dfdfdf;   
   }
-  button.help {
-    padding: 2px 6px;
-    border-radius: 1000px;
-    border: 1px #dadada solid;
-    outline: none;
+  button:disabled {
+    color: #999;
+    background: #fff;
   }
 
   #wpWrapper {
@@ -45,11 +43,17 @@
   }
   #wpDisplay {
     margin: 3px;
+    width: 200px;
     border-collapse: collapse;
   }
 
   .wpGroup:nth-child(2n-1) {background-color: lightgray;}
   .wpGroup:nth-child(2n) {background-color: whitesmoke;}
+
+  thead.wpGroup td {
+    text-align: center;
+    padding: 3px 0;
+  }
   
   .wpVariant {display: table-row;}
   .wpVariant:hover {outline: 3px solid rgba(100, 100, 255, 0.75);}
@@ -77,6 +81,25 @@
   input:checked ~ .wpHint code {
     background-color: midnightblue;
     border-color: #49f;
+  }
+
+  .aligntop {vertical-align: top;}
+
+  #buttons {
+    display: grid;
+    grid-template: 1fr 1fr 1fr 1fr 1fr / 1fr 1fr 1fr 1fr 25px;
+    grid-gap: 3px;
+  }
+  button.span4 {grid-column-end: span 4;}
+  button.span3 {grid-column-end: span 3;}
+  button.span2 {grid-column-end: span 2;}
+  button.help.JSON {grid-row-end: span 2;}
+  button.help {
+    padding: 2px 6px;
+    border-radius: 1000px;
+    border: 1px #dadada solid;
+    outline: none;
+    place-self: center;
   }
 
   #saveArea {
@@ -118,7 +141,7 @@
     opacity: 0.9
   }
 </style>
-<style id='shortStyle'>
+<style id='saveStyle'>
   path.edge {
     stroke: black;
     stroke-width: 0.05;
@@ -129,7 +152,13 @@
   <table>
     <tr>
       <td><nobr><div id='wpWrapper'>
-        <table id='wpDisplay'></table>
+        <table id='wpDisplay'>
+          <thead class='wpGroup'>
+            <td><button class='help wallpapers'>?</button></td>
+            <td><button class='help lattices'>?</button></td>
+            <td><button class='help mnemonics'>?</button></td>
+          </thead>
+        </table>
       </div></nobr></td>
       <td><svg id='main'>
         <g id='drawing'></g>
@@ -137,24 +166,20 @@
       </svg></td>
     </tr>
     <tr>
-      <td><table id='buttons'><tbody>
-        <tr>
-          <td class='button' id='downloadSVG' colspan=4>Download SVG</td>
-          <td><button class='help'>?</button></td>
-        </tr><tr>
-          <td class='button' id='lockJSON' colspan=3>Lock JSON</td>
-          <td class='button' id='updateJSON'>⟳</td>
-          <td><button class='help'>?</button></td>
-        </tr><tr>
-          <td class='button' id='lockRendering' colspan=3>Lock Rendering</td>
-          <td class='button' id='updateJSON'>⟳</td>
-          <td><button class='help'>?</button></td>
-        </tr><tr>
-          <td class='button' id='save' colspan=2>Save</td>
-          <td class='button' id='lockJson' colspan=2>Load...</td>
-          <td><button class='help'>?</button></td>
-        </tr>
-      </tbody></table></td>
+      <td class='aligntop'><div id='buttons'>
+          <button id='downloadSVG' class='span4'>Download SVG</button>
+          <button class='help download'>?</button>
+          <button id='loadJSON' class='span4'>Load From JSON</button>
+          <button class='help JSON'>?</button>
+          <button id='lockJSON' class='span3'>Lock JSON</button>
+          <button id='updateJSON' disabled>⟳</button>
+          <button id='lockRendering' class='span3'>Lock Rendering</button>
+          <button id='updateRendering' disabled>⟳</button>
+          <button class='help rendering'>?</button>
+          <button id='save' class='span2'>Save</button>
+          <button id='load' class='span2'>Load...</button>
+          <button class='help storage'>?</button>
+      </div></td>
       <td>
         <textarea id='saveArea' rows=10></textarea>
       </td>
@@ -200,6 +225,16 @@
 
     var prototileElements, ptEdgeElements, ptCpointElements, ptAnchorElements,
       ptVertexWrappers, ptVertexElements // defined by rerenderControls
+
+    const tips = {
+      wallpapers: 'These are the <a href="https://en.wikipedia.org/wiki/Wallpaper_group">wallpaper groups</a>. They determine the symmetry of the resulting tesselation. There are 17 in total, but not all of them work with how I programmed this. Experiment!',
+      lattices: 'These are the lattices of the tesselation, or how the centers of the tiles are arranged. Some wallpaper groups allow for multiple lattices, and some do not. Since the orientation of the symmetry matters for parquet deformations, many of the group/lattice pairs are included multiple times.',
+      mnemonics: 'These are mnemonics to try to show what using the specific variant will look like.',
+      download: 'SVG is an image format which can be displayed by any modern browser. It\'s a vector format, which means it stores shapes and positions instead of pixels. If you want a png instead, take a screenshot using the Snipping Tool on Windows and Shift-Command-4 on Mac.',
+      JSON: 'JSON is a data storage format which is used to store your deformation. It\'s displayed just to the right; with a bit of experimentation, it should be pretty clear how it works. You can modify the JSON and then load from it for precision in placing your points. If you want to mess with the prototiles without disturbing your JSON, you can lock it, and click the "⟳" button if you want to update it.',
+      rendering: 'If your computer struggles to keep up whenever you change the prototiles, then it may be a good idea to lock the rendering, and click the "⟳" button when you make an adjustment.',
+      storage: 'These buttons save and load the parquet deformations locally in your browser.'
+    }
 
     const rt3 = Math.sqrt(3)
     const third = 1/3
@@ -598,6 +633,13 @@
       saveArea = d3.select('#saveArea')
 
       d3.select('#downloadSVG').on('click', downloadSVG)
+      d3.select('#loadJSON').on('click', loadJSON)
+      d3.select('#lockJSON').on('click', lockJSON)
+      d3.select('#updateJSON').on('click', updateJSON)
+      d3.select('#lockRendering').on('click', lockRendering)
+      d3.select('#updateRendering').on('click', updateRendering)
+      d3.select('#save').on('click', save)
+      d3.select('#load').on('click', load)
 
       //big container svg elements
       svg = d3.select('#main')
@@ -632,7 +674,6 @@
 
     // create everything from scratch
     function rerender() {
-      console.log(wallpaper.cpoint)
       edgeGenerator = edgeGeneratorFactory()
       if (parqElements) parqElements.remove()
       parqElements = drawing.selectAll('g')
@@ -648,7 +689,7 @@
         .attr('d', d => d.data)
     }
 
-    // when no new elements need to be inserted, we can simply update them
+    // when no new elements need to be inserted or removed, we can simply update them
     function reupdate() {
       edgeGenerator = edgeGeneratorFactory()
       if (cmoved) {
@@ -727,7 +768,7 @@
         .call(vertexDrag)
 
       if (liveDrawing) shouldRedraw = Math.max(2, shouldRedraw)
-      if (liveSave) save()
+      if (liveSave) updateJSON()
     }
 
     function reupdateControls() {
@@ -753,21 +794,7 @@
         .attr('cy', d => d[1])
 
       if (liveDrawing) shouldRedraw = Math.max(1, shouldRedraw)
-      if (liveSave) save()
-    }
-
-    function save() {
-      saveArea.node().value = saveString()
-    }
-
-    function load(s) {
-      if (s === undefined) s = saveArea.node().value 
-      deformation = JSON.parse(s)
-      console.log()
-      wallpaper = new wallpapers[deformation.symmetry][deformation.lattice]()
-      wallpaper.cpoint = wallpaper.cmove(...deformation.cpoint)
-      prototiles = deformation.tiles.map(t => new tile(t))
-      rerenderControls()
+      if (liveSave) updateJSON()
     }
 
     /***************\
@@ -827,9 +854,55 @@
       +'<svg xmlns="http://www.w3.org/2000/svg" version="1.1" xmlns:xlink="http://www.w3.org/1999/xlink">\n'
       let blob = new Blob(
         [prefix, drawing.node().outerHTML.replace(/(\.\d{4})\d*/g, '$1'),
-        d3.select('style#shortStyle').node().outerHTML, '\n</svg>'], {type: 'image/svg+xml'})
+        d3.select('style#saveStyle').node().outerHTML, '\n</svg>'], {type: 'image/svg+xml'})
       console.log(blob)
       saveAs(blob, 'parquet.svg')
+    }
+
+    function loadJSON() {
+      deformation = JSON.parse(saveArea.node().value)
+      console.log()
+      wallpaper = new wallpapers[deformation.symmetry][deformation.lattice]()
+      if (wallpaper.cpoint) wallpaper.cpoint = wallpaper.cmove(...deformation.cpoint)
+      prototiles = deformation.tiles.map(t => new tile(t))
+      rerenderControls()
+    }
+    function lockJSON() {
+      if (liveSave) {
+        liveSave = false
+        this.innerText = "Unlock JSON"
+        this.nextElementSibling.removeAttribute('disabled')
+      } else {
+        liveSave = true
+        this.innerText = "Lock JSON"
+        this.nextElementSibling.setAttribute('disabled', '')
+      }
+    }
+    //TODO: set this up to use document.execCommand
+    function updateJSON(t) {
+      saveArea.node().value = saveString()
+    }
+
+    function lockRendering() {
+      if (liveDrawing) {
+        liveDrawing = false
+        this.innerText = "Unlock JSON"
+        this.nextElementSibling.removeAttribute('disabled')
+      } else {
+        liveDrawing = true
+        this.innerText = "Lock JSON"
+        this.nextElementSibling.setAttribute('disabled', '')
+      }
+    }
+    function updateRendering() {
+      reupdate()
+    }
+
+    function save() {
+      
+    }
+    function load() {
+      
     }
 
     /***************\
@@ -899,22 +972,22 @@
         }
       }
 
-      // arrow function does 1.7320508075688772 -> "1.7321"
+      // arrow function does 1.7320508075688772 -> " 1.7321"
       result = JSON.stringify(
         {symmetry: symmetry, lattice: lattice.name, cpoint: wallpaper.cpoint, tiles: prototiles.map(t => t.edges)},
-        (key, val) => val.toFixed? val.toFixed(4).replace(/[0.](?=0*$)/g,' ') : val,
+        (key, val) => val.toFixed? val.toFixed(4).replace(/[0.](?=0*$)/g,' ').replace(/^(?=\d)/, ' ') : val,
         2
       )
       result = result
-        .replace(/"(-?\d+(\.\d*)? *)"/g, '$1')                          // quoted numbers to actual numbers
-        .replace(/( *)\[\n *(-?\d.*)\n *(-?\d.*)\n *\]/g, '$1[$2 $3]')  // each point to single line
-        .replace(/( {8}.*\n)(?= {8})/g,'$1~').replace(/\n~ */g, ' ')    // all points in each edge to same line
-        .replace(/\n {6}\[\n {8}(.*)\n {6}\]/g, '\n      [$1]')         // each edge to single line
-        .replace(/( {6})(\[\]),\n(?=\1\2)/g, '$1$2, ')                  // consecutive empty edges to same line
-        .replace(/([^\n ]) {7}/g, '$1 ')                                // get rid of extra spaces from previous step
-        .replace(/\n {4}\[\n {6}(.*)\n {4}\]/g, '\n    [$1]')           // "small" tiles to single line
-        .replace(/  \],\n *\[\n/g, '  ], [\n')                          // delimiter between "big" arrays to single line
-        .replace(/{\n(  .*)\n ( .*)\n ( .*)/, '{\n$1$2$3')              // non-"tiles" props to single line
+        .replace(/"(-? ?\d+(\.\d*)? *)"/g, '$1')                              // quoted numbers to actual numbers
+        .replace(/( *)\[\n *?(-? ?\d.*)\n *?(-? ?\d.*)\n *\]/g, '$1[$2 $3]')  // each point to single line
+        .replace(/( {8}.*\n)(?= {8})/g,'$1~').replace(/\n~ */g, ' ')          // all points in each edge to same line
+        .replace(/\n {6}\[\n {8}(.*)\n {6}\]/g, '\n      [$1]')   // each edge to single line
+        .replace(/( {6})(\[\]),\n(?=\1\2)/g, '$1$2, ')            // consecutive empty edges to same line
+        .replace(/([^\n ]) {7}/g, '$1 ')                          // get rid of extra spaces from previous step
+        .replace(/\n {4}\[\n {6}(.*)\n {4}\]/g, '\n    [$1]')     // "small" tiles to single line
+        .replace(/  \],\n *\[\n/g, '  ], [\n')                    // delimiter between "big" arrays to single line
+        .replace(/{\n(  .*)\n ( .*)\n ( .*)/, '{\n$1$2$3')        // non-"tiles" props to single line
       // I know it's a lot of junk but it makes the JSONs look super nice so I don't care
       return result
     }
