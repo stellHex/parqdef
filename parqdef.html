@@ -10,39 +10,11 @@
     font-family: monospace;
   }
 
-  /*button styles swiped from google*/
-  button {
-    color: #333333;
-    background: #f3f3f3;
-    border: 1px #dadada solid;
-    padding: 5px 10px;
-    border-radius: 2px;
-    font-weight: bold;
-    font-size: 9pt;
-    outline: none;
-    cursor: default;
-    user-select: none;
-  }
-  button:hover:not(:disabled) {
-    border: 1px #c6c6c6 solid;
-    box-shadow: 1px 1px 1px #eaeaea;
-    color: #222;
-    background: #f7f7f7;
-  }
-  button:active {
-    box-shadow: inset 1px 1px 1px #dfdfdf;   
-  }
-  button:disabled {
-    color: #999;
-    background: #fff;
-  }
-
   #wpWrapper {
-    overflow: scroll;
     background-color: black;
+    padding: 3px;
   }
   #wpDisplay {
-    margin: 3px;
     width: 200px;
     border-collapse: collapse;
   }
@@ -50,7 +22,7 @@
   .wpGroup:nth-child(2n-1) {background-color: lightgray;}
   .wpGroup:nth-child(2n) {background-color: whitesmoke;}
 
-  thead.wpGroup td {
+  tfoot.wpGroup td {
     text-align: center;
     padding: 3px 0;
   }
@@ -99,7 +71,49 @@
     border-radius: 1000px;
     border: 1px #dadada solid;
     outline: none;
+    position: relative;
     place-self: center;
+  }
+  /* button styles swiped from google */
+  button {
+    color: #333333;
+    background: #f3f3f3;
+    border: 1px #dadada solid;
+    padding: 5px 10px;
+    border-radius: 2px;
+    font-weight: bold;
+    font-size: 9pt;
+    outline: none;
+    cursor: default;
+    user-select: none;
+  }
+  button:hover:not(:disabled) {
+    border: 1px #c6c6c6 solid;
+    box-shadow: 1px 1px 1px #eaeaea;
+    color: #222;
+    background: #f7f7f7;
+  }
+  button:active {
+    box-shadow: inset 1px 1px 1px #dfdfdf;   
+  }
+  button:disabled {
+    color: #999;
+    background: #fff;
+  }
+  /* super simple tooltips swiped from what-if.xkcd.com */
+  .tooltip {
+    display: none;
+    position: absolute;
+    left: 25px;
+    border: 1px solid black;
+    padding: 5px;
+    background-color: #fff;
+    transform: translateZ(1px);
+    white-space:normal;
+    word-wrap: break-word;
+    min-width: 300px;
+    z-index: 9999;
+    overflow: auto;
   }
 
   #saveArea {
@@ -107,7 +121,7 @@
     resize: vertical;
     width: 75%;
   }
-
+</style><style id='controlStyle'>
   path.protoedge {
     stroke: #444;
     stroke-width: 0.04;
@@ -141,7 +155,7 @@
     opacity: 0.9
   }
 </style>
-<style id='saveStyle'>
+<style id='parqStyle'>
   path.edge {
     stroke: black;
     stroke-width: 0.05;
@@ -153,11 +167,11 @@
     <tr>
       <td><nobr><div id='wpWrapper'>
         <table id='wpDisplay'>
-          <thead class='wpGroup'>
+          <tfoot class='wpGroup'>
             <td><button class='help wallpapers'>?</button></td>
             <td><button class='help lattices'>?</button></td>
             <td><button class='help mnemonics'>?</button></td>
-          </thead>
+          </tfoot>
         </table>
       </div></nobr></td>
       <td><svg id='main'>
@@ -186,7 +200,7 @@
     </tr>
   </table>
   
-  <script src='http://d3js.org/d3.v4.min.js'></script>
+  <script src='http://d3js.org/d3.v4.js'></script>
   <script src="https://d3js.org/d3-drag.v1.min.js"></script>
   <script src='https://d3js.org/d3-array.v1.min.js'></script>
   <script src='https://d3js.org/d3-shape.v1.js'></script>
@@ -641,6 +655,13 @@
       d3.select('#save').on('click', save)
       d3.select('#load').on('click', load)
 
+      d3.selectAll('.help') 
+        // this is the somehow the simplest way to add data to extant elements, despite being non-idiomatic AF
+        .each(function(d,i) {let cL = this.classList; this.__data__ = cL[1] == 'help' ? cL[0] : cL[1]})
+        .append('div')
+        .html(d => tips[d])
+        .classed('tooltip', true)
+
       //big container svg elements
       svg = d3.select('#main')
         .style('width', width)
@@ -854,7 +875,7 @@
       +'<svg xmlns="http://www.w3.org/2000/svg" version="1.1" xmlns:xlink="http://www.w3.org/1999/xlink">\n'
       let blob = new Blob(
         [prefix, drawing.node().outerHTML.replace(/(\.\d{4})\d*/g, '$1'),
-        d3.select('style#saveStyle').node().outerHTML, '\n</svg>'], {type: 'image/svg+xml'})
+        d3.select('style#parqStyle').node().outerHTML, '\n</svg>'], {type: 'image/svg+xml'})
       console.log(blob)
       saveAs(blob, 'parquet.svg')
     }
