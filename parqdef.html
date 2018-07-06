@@ -105,6 +105,7 @@
     display: none;
     position: absolute;
     left: 25px;
+    bottom: -10px;
     border: 1px solid black;
     padding: 5px;
     background-color: #fff;
@@ -114,6 +115,8 @@
     min-width: 300px;
     z-index: 9999;
     overflow: auto;
+    cursor: auto;
+    user-select: text;
   }
 
   #saveArea {
@@ -215,7 +218,7 @@
     |*               *|
     \*****************/
 
-    var wpDisplay, symmetryElements, latticeElements, saveArea,
+    var wpDisplay, symmetryElements, latticeElements, helpElements, saveArea,
       svg, drawing, controls // defined by init
     var shouldRedraw = false
     var cmoved = false
@@ -241,7 +244,7 @@
       ptVertexWrappers, ptVertexElements // defined by rerenderControls
 
     const tips = {
-      wallpapers: 'These are the <a href="https://en.wikipedia.org/wiki/Wallpaper_group">wallpaper groups</a>. They determine the symmetry of the resulting tesselation. There are 17 in total, but not all of them work with how I programmed this. Experiment!',
+      wallpapers: 'These are the <a href="https://en.wikipedia.org/wiki/Wallpaper_group">wallpaper groups</a>. They determine the symmetry of the resulting tesselation. There are 17 in total; not all of them are present due to technical limitations with the implementation, but there\'s still plenty of variety. Experiment!',
       lattices: 'These are the lattices of the tesselation, or how the centers of the tiles are arranged. Some wallpaper groups allow for multiple lattices, and some do not. Since the orientation of the symmetry matters for parquet deformations, many of the group/lattice pairs are included multiple times.',
       mnemonics: 'These are mnemonics to try to show what using the specific variant will look like.',
       download: 'SVG is an image format which can be displayed by any modern browser. It\'s a vector format, which means it stores shapes and positions instead of pixels. If you want a png instead, take a screenshot using the Snipping Tool on Windows and Shift-Command-4 on Mac.',
@@ -254,7 +257,7 @@
     const third = 1/3
 
     // note: inconsistent use of arrow functions and `function()` functions, because I prefer arrow functions in
-    // compact definitions like this, but sometimes they can't be used because their `this` can't be rebound
+    // crowded definitions like this, but sometimes they can't be used because their `this` can't be rebound
     const wallpapers = {
       p1: {
         square: function() {
@@ -644,8 +647,6 @@
         .append('code')
         .text(d => d.hint)
 
-
-
       d3.select('#downloadSVG').on('click', downloadSVG)
       d3.select('#loadJSON').on('click', loadJSON)
       d3.select('#lockJSON').on('click', lockJSON)
@@ -657,9 +658,13 @@
 
       d3.selectAll('.help') 
         .datum(function(d,i) {let cL = this.classList; return cL[1] == 'help' ? cL[0] : cL[1]})
-        .append('div')
+        .on('click', function(){ d3.event.whichTooltip = d3.select(this).select('.tooltip') })
+      .append('div')
         .html(d => tips[d])
         .classed('tooltip', true)
+        .on('click', ()=>{d3.event.stopPropagation()})
+
+      d3.select(document).on('click', tooltipCheck)
 
       saveArea = d3.select('#saveArea')
 
@@ -831,10 +836,10 @@
       document.execCommand('undo')
       reupdateControls()
     }
-
     function dragCpoint(d, i, g) {
       wallpaper.cpoint.splice(0, 2, ...wallpaper.cmove(d3.event.x, d3.event.y))
       cmoved = true
+      document.execCommand('undo')
       reupdateControls()
     }
 
@@ -854,14 +859,13 @@
       rerenderControls()
       let newVertex = ptVertexWrappers._groups[d.ptIndex][i].children[j-1]
       d3.select(newVertex).dispatch('mouseup')
-      // selection.dispatch creates a custom event which doesn't have the "view" property
+      // <selection>.dispatch creates a custom event which doesn't have the "view" property
       // d3.drag requires event.view, so we do this "properly" instead
       let mouseDown = new MouseEvent('mousedown',
         {view: window, bubbles: true, cancelable: true}
       );
       newVertex.dispatchEvent(mouseDown)
     }
-
     function deleteVertex(d, i, g) {
       let e = d3.event
       e.preventDefault()
@@ -869,6 +873,13 @@
         prototiles[k].edges[d.eIndex].splice(i, 1)
       }
       rerenderControls()
+    }
+
+    function tooltipCheck() {
+      let tooltip = d3.event.whichTooltip, wasAlreadyDisplayed = true
+      if (tooltip) wasAlreadyDisplayed = tooltip.style('display') == 'block'
+      d3.selectAll('.tooltip').style('display', 'none')
+      if (!wasAlreadyDisplayed) tooltip.style('display', 'block')
     }
 
     function downloadSVG() {
@@ -899,7 +910,6 @@
         this.innerText = "Lock JSON"
       }
     }
-
     function updateJSON(t) {
       let textarea = saveArea.node()
       textarea.select()
@@ -987,6 +997,7 @@
       return result
     }
 
+    // creates JSON representation of all relevant data
     function saveString() {
       let lattice = wallpaper.constructor;
       let symmetry
@@ -1010,7 +1021,7 @@
         .replace(/( {6})(\[\]),\n(?=\1\2)/g, '$1$2, ')            // consecutive empty edges to same line
         .replace(/([^\n ]) {7}/g, '$1 ')                          // get rid of extra spaces from previous step
         .replace(/\n {4}\[\n {6}(.*)\n {4}\]/g, '\n    [$1]')     // "small" tiles to single line
-        .replace(/  \],\n *\[\n/g, '  ], [\n')                    // delimiter between "big" arrays to single line
+        .replace(/  \],\n *\[\n/g, '  ], [\n')                    // "],[" between "big" arrays to single line
         .replace(/{\n(  .*)\n ( .*)\n ( .*)/, '{\n$1$2$3')        // non-"tiles" props to single line
       // I know it's a lot of junk but it makes the JSONs look super nice so I don't care
       return result
