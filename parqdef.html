@@ -186,7 +186,7 @@
           <button id='loadJSON' class='span4'>Load From JSON</button>
           <button class='help JSON'>?</button>
           <button id='lockJSON' class='span3'>Lock JSON</button>
-          <button id='updateJSON' disabled>⟳</button>
+          <button id='updateJSON'>⟳</button>
           <button id='lockRendering' class='span3'>Lock Rendering</button>
           <button id='updateRendering' disabled>⟳</button>
           <button class='help rendering'>?</button>
@@ -590,8 +590,8 @@
     |*              *|
     \****************/
 
-    const cpointDrag = d3.drag().on('drag', dragCpoint)
-    const vertexDrag = d3.drag().on('drag', dragVertex)
+    const cpointDrag = d3.drag().on('start', updateJSON).on('drag', dragCpoint)
+    const vertexDrag = d3.drag().on('start', updateJSON).on('drag', dragVertex)
 
     var wallpaper
 
@@ -617,7 +617,7 @@
       // symmetry sidebar
       wpDisplay = d3.select('#wpDisplay').datum(wpData)
       symmetryElements = wpDisplay.selectAll('tbody')
-        .data(d => d).enter().append('tbody')
+        .data(d => d).enter().insert('tbody',':last-child')
         .classed('wpGroup', true)
       latticeElements = symmetryElements.selectAll('label')
         .data(d => d).enter().append('label')
@@ -644,7 +644,7 @@
         .append('code')
         .text(d => d.hint)
 
-      saveArea = d3.select('#saveArea')
+
 
       d3.select('#downloadSVG').on('click', downloadSVG)
       d3.select('#loadJSON').on('click', loadJSON)
@@ -656,11 +656,12 @@
       d3.select('#load').on('click', load)
 
       d3.selectAll('.help') 
-        // this is the somehow the simplest way to add data to extant elements, despite being non-idiomatic AF
-        .each(function(d,i) {let cL = this.classList; this.__data__ = cL[1] == 'help' ? cL[0] : cL[1]})
+        .datum(function(d,i) {let cL = this.classList; return cL[1] == 'help' ? cL[0] : cL[1]})
         .append('div')
         .html(d => tips[d])
         .classed('tooltip', true)
+
+      saveArea = d3.select('#saveArea')
 
       //big container svg elements
       svg = d3.select('#main')
@@ -827,6 +828,7 @@
     function dragVertex(d, i, g) {
       d[0] = d3.event.x
       d[1] = d3.event.y
+      document.execCommand('undo')
       reupdateControls()
     }
 
@@ -892,26 +894,27 @@
       if (liveSave) {
         liveSave = false
         this.innerText = "Unlock JSON"
-        this.nextElementSibling.removeAttribute('disabled')
       } else {
         liveSave = true
         this.innerText = "Lock JSON"
-        this.nextElementSibling.setAttribute('disabled', '')
       }
     }
-    //TODO: set this up to use document.execCommand
+
     function updateJSON(t) {
-      saveArea.node().value = saveString()
+      let textarea = saveArea.node()
+      textarea.select()
+      supportsCommand = document.execCommand('insertText', false, saveString())
+      if (!supportsCommand) textarea.value = saveString()
     }
 
     function lockRendering() {
       if (liveDrawing) {
         liveDrawing = false
-        this.innerText = "Unlock JSON"
+        this.innerText = "Unlock Rendering"
         this.nextElementSibling.removeAttribute('disabled')
       } else {
         liveDrawing = true
-        this.innerText = "Lock JSON"
+        this.innerText = "Lock Rendering"
         this.nextElementSibling.setAttribute('disabled', '')
       }
     }
