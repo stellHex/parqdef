@@ -108,7 +108,7 @@
     bottom: -10px;
     border: 1px solid black;
     padding: 5px;
-    background-color: #fff;
+    background-color: #eee;
     transform: translateZ(1px);
     white-space:normal;
     word-wrap: break-word;
@@ -117,6 +117,7 @@
     overflow: auto;
     cursor: auto;
     user-select: text;
+    text-align: left;
   }
 
   #saveArea {
@@ -235,8 +236,8 @@
 
     const assign = Object.assign  
 
-    var parqLocs, prototiles // defined by restart
-    var parqElements, edgeElements // defined by rerender
+    var prototiles // defined by restart
+    var parqLocs, parqElements, edgeElements // defined by rerender
     var edgeGenerator // defined by rerender AND reupdate
     var edgeTfs // defined by many things
 
@@ -248,7 +249,7 @@
       lattices: 'These are the lattices of the tesselation, or how the centers of the tiles are arranged. Some wallpaper groups allow for multiple lattices, and some do not. Since the orientation of the symmetry matters for parquet deformations, many of the group/lattice pairs are included multiple times.',
       mnemonics: 'These are mnemonics to try to show what using the specific variant will look like.',
       download: 'SVG is an image format which can be displayed by any modern browser. It\'s a vector format, which means it stores shapes and positions instead of pixels. If you want a png instead, take a screenshot using the Snipping Tool on Windows and Shift-Command-4 on Mac.',
-      JSON: 'JSON is a data storage format which is used to store your deformation. It\'s displayed just to the right; with a bit of experimentation, it should be pretty clear how it works. You can modify the JSON and then load from it for precision in placing your points. If you want to mess with the prototiles without disturbing your JSON, you can lock it, and click the "⟳" button if you want to update it.',
+      JSON: 'JSON is a data storage format which is used to store your deformation. It\'s displayed just to the right; with a bit of experimentation, it should be pretty clear how it works. You can modify the JSON and then load from it for precision modification. If you want to mess with the prototiles without disturbing your JSON, you can lock it, and click the "⟳" button if you want to update it.',
       rendering: 'If your computer struggles to keep up whenever you change the prototiles, then it may be a good idea to lock the rendering, and click the "⟳" button when you make an adjustment.',
       storage: 'These buttons save and load the parquet deformations locally in your browser.'
     }
@@ -574,6 +575,12 @@
       ]
     ]
 
+    const examples = 
+    [{"title":"proliferation","symmetry":"p6","lattice":"hexagonal_c","tiles":[
+      [[[0.8119,0.5313],[0.7036,0.5938],[0.6495,0.625],[0.5954,0.6563],[0.4872,0.7188]]],
+      [[[0.866,0.625],[0.866,0.875],[0.866,1],[0.7577,0.9375],[0.5413,0.8125]]],
+      [[[1.1,0.625],[0.6495,0.875],[0.866,1],[0.6495,1.125],[0.6495,0.625]]]]}]
+
     function tile(edges) {
       this.anchors = wallpaper.anchors()
       this.edges = edges || Array.from({length: wallpaper.edgeEnds.length}, () => [])
@@ -690,17 +697,17 @@
 
     // TODO: add options to this
     function restart() {
-      parqLocs = d3.cross(d3.range(nw), d3.range(nh), (a, b) => 
-      ({
-        nx: a,
-        ny: b
-      }))
       prototiles = [new tile(), new tile()]
       rerenderControls()
     }
 
     // create everything from scratch
     function rerender() {
+      parqLocs = d3.cross(d3.range(nw), d3.range(nh), (a, b) => 
+      ({
+        nx: a,
+        ny: b
+      }))
       edgeGenerator = edgeGeneratorFactory()
       if (parqElements) parqElements.remove()
       parqElements = drawing.selectAll('g')
@@ -1010,7 +1017,7 @@
       // arrow function does 1.7320508075688772 -> " 1.7321"
       result = JSON.stringify(
         {symmetry: symmetry, lattice: lattice.name, cpoint: wallpaper.cpoint, tiles: prototiles.map(t => t.edges)},
-        (key, val) => val.toFixed? val.toFixed(4).replace(/[0.](?=0*$)/g,' ').replace(/^(?=\d)/, ' ') : val,
+        (key, val) => (exists(val) && val.toFixed)? val.toFixed(4).replace(/[0.](?=0*$)/g,' ').replace(/^(?=\d)/, ' ') : val,
         2
       )
       result = result
@@ -1033,6 +1040,10 @@
 
     function indexOf(that, e) {
       return Array.prototype.indexOf.call(that, e)
+    }
+
+    function exists (val) {
+      return val !== null && val !== undefined
     }
   </script>
 </body>
