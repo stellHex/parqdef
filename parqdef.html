@@ -217,12 +217,13 @@
     \*****************/
 
     var wpDisplay, symmetryElements, latticeElements, helpElements, saveArea,
-      svg, drawing, controls // defined by init
+      svg, drawing, controls, saves // defined by init
     var shouldRedraw = false
     var cmoved = false
   
     var liveSave = true
     var liveDrawing = true
+    var saveConfirm = false
 
     var nw = 23, nh = 11
     var border = 30, width = 1200, controlHeight = 150, controlWidth = width/controlHeight
@@ -274,14 +275,14 @@
           assign(this, new wallpapers.p1.square())
           this.cmove = (x,y) => [x,1]; this.cmove.cursor = 'ew-resize'
           this.anchors = function () {return [[0, 0], [this.cpoint[0], 0], this.cpoint, [0, 1]]}
-          this.edgeTfs = () => [['', `translate(-${this.cpoint[0]} 0)`], ['', 'translate(0 -1)']]
+          this.edgeTfs = () => [['', `translate(${-this.cpoint[0]} 0)`], ['', 'translate(0 -1)']]
           this.tf = function(d) {return `translate(${this.cpoint[0]*d.nx} ${d.ny})`}
         },
         oblique: function() {
           assign(this, new wallpapers.p1.square())
           this.cmove = (x,y) => [x,y]; this.cmove.cursor = 'move'
           this.anchors = () => [[0, 0], [1, 0], this.cpoint, [this.cpoint[0]-1, this.cpoint[1]]]
-          this.edgeTfs = () => [['', 'translate(-1 0)'], ['', `translate(${1-this.cpoint[0]} -${this.cpoint[1]})`]]
+          this.edgeTfs = () => [['', 'translate(-1 0)'], ['', `translate(${1-this.cpoint[0]} ${-this.cpoint[1]})`]]
           this.tf = function(d) {return `translate(${d.nx + (this.cpoint[0]%1)*d.ny} ${this.cpoint[1] * d.ny})`}
         },
         hexagonal: function() {
@@ -289,7 +290,7 @@
           this.cmove = (x,y) => [this.cpoint[0],0.5]; this.cmove.cursor = 'default'
           this.anchors = function () {return [[0, 0.5], [this.cpoint[0]/2, 0], this.cpoint, [this.cpoint[0]/2, 1]]}
           this.edgeEnds = [[1, 2], [2, 3]],
-          this.edgeTfs = () => [['',`translate(-${this.cpoint[0]/2} 0.5)`],['',`translate(-${this.cpoint[0]/2} -0.5)`]]
+          this.edgeTfs = () => [['',`translate(${-this.cpoint[0]/2} 0.5)`],['',`translate(${-this.cpoint[0]/2} -0.5)`]]
           this.tf = function(d) {return `translate(${d.nx*this.cpoint[0]/2} ${d.ny + (d.nx%2)/2})`}
         },
         rhombic: function() {
@@ -348,12 +349,12 @@
         },
         rectangular_a: function() {
           assign(this, new wallpapers.p1.rectangular())
-          this.edgeTfs = () => [['', `translate(-${this.cpoint[0]} 1) scale(1 -1)`], ['', 'translate(0 -1)']],
+          this.edgeTfs = () => [['', `translate(${-this.cpoint[0]} 1) scale(1 -1)`], ['', 'translate(0 -1)']],
           this.tf = function(d) {return `translate(${this.cpoint[0]*d.nx} ${d.ny+d.nx%2}) ${d.nx%2?'scale(1 -1)':''}`}
         },
         rectangular_b: function() {
           assign(this, new wallpapers.p1.rectangular())
-          this.edgeTfs = () => [['', `translate(-${this.cpoint[0]} 0)`], ['', `translate(${this.cpoint[0]} -1) scale(-1 1)`]],
+          this.edgeTfs = () => [['', `translate(${-this.cpoint[0]} 0)`], ['', `translate(${this.cpoint[0]} -1) scale(-1 1)`]],
           this.tf = function(d) {return `translate(${this.cpoint[0]*(d.nx+d.ny%2)} ${d.ny}) ${d.ny%2?'scale(-1 1)':''}`}
         },
       },
@@ -368,13 +369,13 @@
           assign(this, new wallpapers.p1.hexagonal())
           this.edgeEnds = [[1,2]]
           this.edgeTfs = function () {let x=this.cpoint[0];
-            return [['', `translate(-${x/2}  0.5)`, `scale(-1 1) translate(-${x} 0)`, `scale(-1 1) translate(-${x*1.5}  0.5)`]]}
+            return [['', `translate(${-x/2}  0.5)`, `scale(-1 1) translate(${-x} 0)`, `scale(-1 1) translate(${-x*1.5}  0.5)`]]}
           this.tf = function(d) {return `translate(${d.nx*this.cpoint[0]/2} ${d.ny + (d.nx%2)/2})`}
         },
         hexagonal_b: function() {
           assign(this, new wallpapers.cm.hexagonal_a())
           this.edgeTfs = function () {let x=this.cpoint[0];
-            return [['', `translate(-${x/2}  0.5)`, `scale(1 -1) translate(0 -1)`, `scale(1 -1) translate(-${x/2}  -0.5)`]]}
+            return [['', `translate(${-x/2}  0.5)`, `scale(1 -1) translate(0 -1)`, `scale(1 -1) translate(${-x/2}  -0.5)`]]}
         },
         rhombic_a: function() {
           assign(this, new wallpapers.cm.hexagonal_a())
@@ -405,15 +406,15 @@
           assign(this, new wallpapers.p2.rectangular())
           this.edgeEnds = [[3,4],[4,5]]
           this.edgeTfs = () => {let x = this.cpoint[0];
-            return [['', `rotate(180 ${x} 0.5)`, `scale(-1 1) translate(-${x} 0)`, `scale(-1 1) rotate(180 ${x/2} 0.5)`],
-                    ['', 'translate(0 -1)', `scale(-1 1) translate(-${x} 0)`, `scale(-1 1) translate(-${x} -1)`]]}
+            return [['', `rotate(180 ${x} 0.5)`, `scale(-1 1) translate(${-x} 0)`, `scale(-1 1) rotate(180 ${x/2} 0.5)`],
+                    ['', 'translate(0 -1)', `scale(-1 1) translate(${-x} 0)`, `scale(-1 1) translate(${-x} -1)`]]}
           this.tf = function(d) {return `translate(${d.nx*this.cpoint[0]} ${d.ny}) rotate(${(d.nx)%2 * 180} ${this.cpoint[0]/2} 0.5)`}
         },
         rectangular_b: function() { // horizontal mirror
           assign(this, new wallpapers.p2.rectangular())
           this.edgeEnds = [[3,4],[4,5]]
           this.edgeTfs = () => {let x = this.cpoint[0];
-            return [['', `translate(-${x} 0)`, `scale(1 -1) translate(0 -1)`, `scale(1 -1) translate(-${x} -1)`],
+            return [['', `translate(${-x} 0)`, `scale(1 -1) translate(0 -1)`, `scale(1 -1) translate(${-x} -1)`],
                     ['', `rotate(180 ${x/2} 1)`, `scale(1 -1) translate(0 -1)`, `scale(1 -1) rotate(180 ${x/2} 0.5)`]]}
           this.tf = function(d) {return `translate(${d.nx*this.cpoint[0]} ${d.ny}) rotate(${(d.ny)%2 * 180} ${this.cpoint[0]/2} 0.5)`}
         }
@@ -427,7 +428,7 @@
         },
         rectangular: function() {
           assign(this, new wallpapers.p1.rectangular())
-          this.edgeTfs = () => [['', `translate(-${this.cpoint[0]} 1) scale(1 -1)`], ['', `translate(${this.cpoint[0]} -1) scale(-1 1)`]]
+          this.edgeTfs = () => [['', `translate(${-this.cpoint[0]} 1) scale(1 -1)`], ['', `translate(${this.cpoint[0]} -1) scale(-1 1)`]]
           this.tf = function(d) {let xpar = d.nx%2; let ypar = d.ny%2;
             return `translate(${(d.nx+ypar)*this.cpoint[0]} ${d.ny+xpar}) scale(${1-2*ypar} ${1-2*xpar})`}
         }
@@ -444,8 +445,8 @@
           assign(this, new wallpapers.p2.hexagonal())
           this.edgeEnds = [[3,4]]
           this.edgeTfs = () => {let x = this.cpoint[0]
-            return [['', `rotate(180 ${x*0.75} 0.25)`, `translate(-${x/2} 0.5)`, `rotate(180 ${x/2} 0.5)`,
-            `scale(-1 1) translate(-${x} 0)`, `scale(-1 1) translate(-${x*1.5} 0.5)`, `scale(-1 1) rotate(180 ${x*0.25} 0.25)`, `scale(-1 1) rotate(180 0 0.5)`]]}
+            return [['', `rotate(180 ${x*0.75} 0.25)`, `translate(${-x/2} 0.5)`, `rotate(180 ${x/2} 0.5)`,
+            `scale(-1 1) translate(${-x} 0)`, `scale(-1 1) translate(${-x*1.5} 0.5)`, `scale(-1 1) rotate(180 ${x*0.25} 0.25)`, `scale(-1 1) rotate(180 0 0.5)`]]}
           this.tf = function(d) {return `translate(${d.nx*this.cpoint[0]/2} ${d.ny + (d.nx%2)/2})`}
         },
         rhombic: function() {
@@ -573,8 +574,7 @@
       ]
     ]
 
-    const examples = 
-    [
+    const examples = [
       {"title":"triangulation","symmetry":"p6","lattice":"hexagonal_c","tiles":[
         [[[0.8119,0.5313],[0.7036,0.5938],[0.6495,0.625],[0.5954,0.6563],[0.4872,0.7188]]],
         [[[0.866,0.625],[0.866,0.875],[0.866,1],[0.7577,0.9375],[0.5413,0.8125]]],
@@ -664,6 +664,7 @@
       d3.select('#lockRendering').on('click', lockRendering)
       d3.select('#updateRendering').on('click', updateRendering)
       d3.select('#save').on('click', save)
+      d3.select('#save').on('mouseout', saveReset)
       d3.select('#load').on('click', load)
 
       d3.selectAll('.help') 
@@ -696,6 +697,10 @@
 
       // draw everything
       restart()
+
+      saves = localStorage.getItem('deformations')
+      if (saves === null) saves = examples
+      else saves = JSON.parse(saves)
     }
 
     // TODO: add options to this
@@ -893,9 +898,16 @@
     }
 
     function downloadSVG() {
+      let svgRect = svg.node().getBoundingClientRect()
+      let gRect = drawing.node().getBoundingClientRect()
+      let w = Math.round(gRect.width + 2*border)
+      let h = Math.round(gRect.height + 2*border)
+      let x = Math.round(svgRect.x-(gRect.x-border))
+      let y = Math.round(svgRect.y-(gRect.y-border))
       let prefix = '<?xml version="1.0" standalone="no"?>\n<?xml-stylesheet type="text/css" href="style8.css"?>\n'
       +'<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">\n'
-      +'<svg xmlns="http://www.w3.org/2000/svg" version="1.1" xmlns:xlink="http://www.w3.org/1999/xlink">\n'
+      +`<svg viewbox="${x} ${y} ${x+w} ${y+h}" width="${w}" height="${h}" `
+      +'xmlns="http://www.w3.org/2000/svg" version="1.1" xmlns:xlink="http://www.w3.org/1999/xlink">\n'
       let blob = new Blob(
         [prefix, drawing.node().outerHTML.replace(/(\.\d{4})\d*/g, '$1'),
         d3.select('style#parqStyle').node().outerHTML, '\n</svg>'], {type: 'image/svg+xml'})
@@ -914,10 +926,10 @@
     function lockJSON() {
       if (liveSave) {
         liveSave = false
-        this.innerText = "Unlock JSON"
+        this.innerText = 'Unlock JSON'
       } else {
         liveSave = true
-        this.innerText = "Lock JSON"
+        this.innerText = 'Lock JSON'
       }
     }
     function updateJSON(t) {
@@ -942,8 +954,21 @@
       reupdate()
     }
 
-    function save() {
-      
+    function save(name='parquet') {
+      if (name == '') name = 'parquet'
+      if (saves.hasOwnProperty(name) && !saveConfirm) {
+        saveConfirm = true
+        this.innerText = 'Replace?'
+      } else {
+        saves[name] = saveArea.node().value.replace(/ /g, '')
+        localStorage.setItem('deformations', JSON.stringify(saves))
+        saveConfirm = false
+        this.innerText = 'Saved!'
+      }
+    }
+    function saveReset() {
+      saveConfirm = false
+      this.innerText = 'Save'
     }
     function load() {
       
