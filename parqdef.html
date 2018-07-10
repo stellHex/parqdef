@@ -156,7 +156,7 @@
     r: 0.07;
     opacity: 0.9
   }
-</style><style id='parqStyle'>
+</style><style id='parqStyle' type='text/css'>
   path.edge {
     stroke: black;
     stroke-width: 0.05;
@@ -902,11 +902,11 @@
       let gRect = drawing.node().getBoundingClientRect()
       let w = Math.round(gRect.width + 2*border)
       let h = Math.round(gRect.height + 2*border)
-      let x = Math.round(svgRect.x-(gRect.x-border))
-      let y = Math.round(svgRect.y-(gRect.y-border))
-      let prefix = '<?xml version="1.0" standalone="no"?>\n<?xml-stylesheet type="text/css" href="style8.css"?>\n'
+      let x = Math.round((gRect.x-border)-svgRect.x)
+      let y = Math.round((gRect.y-border)-svgRect.y); console.log(x,y)
+      let prefix = '<?xml version="1.0" standalone="no"?>\n'
       +'<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">\n'
-      +`<svg viewbox="${x} ${y} ${x+w} ${y+h}" width="${w}" height="${h}" `
+      +`<svg viewBox="${x} ${y} ${w} ${h}" width="${w}" height="${h}" `
       +'xmlns="http://www.w3.org/2000/svg" version="1.1" xmlns:xlink="http://www.w3.org/1999/xlink">\n'
       let blob = new Blob(
         [prefix, drawing.node().outerHTML.replace(/(\.\d{4})\d*/g, '$1'),
