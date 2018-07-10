@@ -3,166 +3,185 @@
 <meta charset='utf-8'>
 <title>Parquet Definition</title>
 <meta content='D3 parquet deformation creator.' name='description'>
-<style>
-  * {
-    font-family: monospace;
-  }
+<head>
+  <style id='miscStyle'>
+    * {
+      font-family: monospace;
+    }
+    /* super simple tooltips swiped from what-if.xkcd.com */
+    .tooltip {
+      display: none;
+      position: absolute;
+      right: -315px;
+      bottom: -1px;
+      border: 1px solid black;
+      padding: 5px;
+      background-color: #eee;
+      transform: translateZ(1px);
+      white-space:normal;
+      word-wrap: break-word;
+      width: 300px;
+      z-index: 9999;
+      overflow: auto;
+      cursor: auto;
+      user-select: text;
+      text-align: left;
+    }
 
-  #wpWrapper {
-    background-color: black;
-    padding: 3px;
-  }
-  #wpDisplay {
-    width: 200px;
-    border-collapse: collapse;
-  }
+    #saveArea {
+      margin: 10px;
+      resize: vertical;
+      width: 75%;
+    }
+  </style><style id='sidebarStyle'>
+    #wpWrapper {
+      background-color: black;
+      padding: 3px;
+    }
+    #wpDisplay {
+      width: 200px;
+      border-collapse: collapse;
+    }
 
-  .wpGroup:nth-child(2n-1) {background-color: lightgray;}
-  .wpGroup:nth-child(2n) {background-color: whitesmoke;}
+    .wpGroup:nth-child(2n-1) {background-color: lightgray;}
+    .wpGroup:nth-child(2n) {background-color: whitesmoke;}
 
-  tfoot.wpGroup td {
-    text-align: center;
-    padding: 3px 0;
-  }
-  
-  .wpVariant {display: table-row;}
-  .wpVariant:hover {outline: 3px solid rgba(100, 100, 255, 0.75);}
-  .wpVariant input {display: none;}
+    tfoot.wpGroup td {
+      text-align: center;
+      padding: 3px 0;
+    }
+    
+    .wpVariant {display: table-row;}
+    .wpVariant:hover {outline: 3px solid rgba(100, 100, 255, 0.75);}
+    .wpVariant input {display: none;}
 
-  #wpDisplay td {
-    padding-left: 2px; padding-right: 2px;
-    border-collapse: collapse;
-  }
-  .wpSymmetry, .wpLattice {text-align: right;}
-  .wpHint {text-align: center;}
-  .wpHint code {
-    display: block;
-    border: 1px solid black;
-    padding: 1px;
-    padding-top: 0px;
-    padding-bottom: 2px;
-    background-color: white;
-  }
-  input:checked ~ * {
-    font-weight: bold;
-    background-color: #49f;
-    color: white;
-  }
-  input:checked ~ .wpHint code {
-    background-color: midnightblue;
-    border-color: #49f;
-  }
+    #wpDisplay td {
+      padding-left: 2px; padding-right: 2px;
+      border-collapse: collapse;
+    }
+    .wpSymmetry, .wpLattice {text-align: right;}
+    .wpHint {text-align: center;}
+    .wpHint code {
+      display: block;
+      border: 1px solid black;
+      padding: 1px;
+      padding-top: 0px;
+      padding-bottom: 2px;
+      background-color: white;
+    }
+    input:checked ~ * {
+      font-weight: bold;
+      background-color: #49f;
+      color: white;
+    }
+    input:checked ~ .wpHint code {
+      background-color: midnightblue;
+      border-color: #49f;
+    }
+  </style><style id='buttonStyle'>
+    .aligntop {vertical-align: top;}
 
-  .aligntop {vertical-align: top;}
+    #buttons {
+      display: grid;
+      grid-template: 1fr 1fr 1fr 1fr 1fr / 1fr 1fr 1fr 1fr 25px;
+      grid-gap: 3px;
+    }
+    button.span4 {grid-column-end: span 4;}
+    button.span3 {grid-column-end: span 3;}
+    button.span2 {grid-column-end: span 2;}
+    button.help.JSON {grid-row-end: span 2;}
+    button.help {
+      padding: 2px 6px;
+      border-radius: 1000px;
+      border: 1px #dadada solid;
+      outline: none;
+      position: relative;
+      place-self: center;
+    }
+    #load { position: relative; }
+    #load table { width: 100%; }
+    #load td:last-child {/*TODO: Fix this! https://stackoverflow.com/questions/18920542/draw-an-x-in-css/18921065#18921065*/
+      position: relative;
+      width: 25px;
+      height: 25px;
+    }
+    #load td:last-child::after, #load td:last-child::before {
+      width: 80%;
+      height: 3px;
+      border-radius: 3px;
+      top: 11px;
+      content: '';
+      background-color: black;
+    }
+    #load td:last-child::after {transform: rotate(45deg);}
+    #load td:last-child::before {transform: rotate(-45deg);}
+    /* button styles swiped from google */
+    button {
+      color: #333333;
+      background: #f3f3f3;
+      border: 1px #dadada solid;
+      padding: 5px 10px;
+      border-radius: 2px;
+      font-weight: bold;
+      font-size: 9pt;
+      outline: none;
+      cursor: default;
+      user-select: none;
+    }
+    button:hover:not(:disabled) {
+      border: 1px #c6c6c6 solid;
+      box-shadow: 1px 1px 1px #eaeaea;
+      color: #222;
+      background: #f7f7f7;
+    }
+    button:active {
+      box-shadow: inset 1px 1px 1px #dfdfdf;   
+    }
+    button:disabled {
+      color: #999;
+      background: #fff;
+    }
+  </style><style id='controlStyle'>
+    path.protoedge {
+      stroke: #444;
+      stroke-width: 0.04;
+      fill: none;
+    }
+    path.protoedge.active {
+      stroke: blue;
+      cursor: copy;
+    }
 
-  #buttons {
-    display: grid;
-    grid-template: 1fr 1fr 1fr 1fr 1fr / 1fr 1fr 1fr 1fr 25px;
-    grid-gap: 3px;
-  }
-  button.span4 {grid-column-end: span 4;}
-  button.span3 {grid-column-end: span 3;}
-  button.span2 {grid-column-end: span 2;}
-  button.help.JSON {grid-row-end: span 2;}
-  button.help {
-    padding: 2px 6px;
-    border-radius: 1000px;
-    border: 1px #dadada solid;
-    outline: none;
-    position: relative;
-    place-self: center;
-  }
-  /* button styles swiped from google */
-  button {
-    color: #333333;
-    background: #f3f3f3;
-    border: 1px #dadada solid;
-    padding: 5px 10px;
-    border-radius: 2px;
-    font-weight: bold;
-    font-size: 9pt;
-    outline: none;
-    cursor: default;
-    user-select: none;
-  }
-  button:hover:not(:disabled) {
-    border: 1px #c6c6c6 solid;
-    box-shadow: 1px 1px 1px #eaeaea;
-    color: #222;
-    background: #f7f7f7;
-  }
-  button:active {
-    box-shadow: inset 1px 1px 1px #dfdfdf;   
-  }
-  button:disabled {
-    color: #999;
-    background: #fff;
-  }
-  /* super simple tooltips swiped from what-if.xkcd.com */
-  .tooltip {
-    display: none;
-    position: absolute;
-    left: 25px;
-    bottom: -10px;
-    border: 1px solid black;
-    padding: 5px;
-    background-color: #eee;
-    transform: translateZ(1px);
-    white-space:normal;
-    word-wrap: break-word;
-    min-width: 300px;
-    z-index: 9999;
-    overflow: auto;
-    cursor: auto;
-    user-select: text;
-    text-align: left;
-  }
-
-  #saveArea {
-    margin: 10px;
-    resize: vertical;
-    width: 75%;
-  }
-</style><style id='controlStyle'>
-  path.protoedge {
-    stroke: #444;
-    stroke-width: 0.04;
-    fill: none;
-  }
-  path.protoedge.active {
-    stroke: blue;
-    cursor: copy;
-  }
-
-  circle.anchor {
-    fill: black;
-    r: 0.06;
-  }
-  circle.cpoint {
-    stroke-width: 0.025;
-    stroke: black;
-    fill: gray;
-    r: 0.07;
-  }
-  circle.cpoint.active {
-    stroke: #c00;
-    fill: #f90;
-  }
-  circle.vertex {
-    stroke-width: 0.025;
-    stroke: #00a;
-    fill: #88f;
-    cursor: move;
-    r: 0.07;
-    opacity: 0.9
-  }
-</style><style id='parqStyle' type='text/css'>
-  path.edge {
-    stroke: black;
-    stroke-width: 0.05;
-    fill: none;
-  }
-</style>
+    circle.anchor {
+      fill: black;
+      r: 0.06;
+    }
+    circle.cpoint {
+      stroke-width: 0.025;
+      stroke: black;
+      fill: gray;
+      r: 0.07;
+    }
+    circle.cpoint.active {
+      stroke: #c00;
+      fill: #f90;
+    }
+    circle.vertex {
+      stroke-width: 0.025;
+      stroke: #00a;
+      fill: #88f;
+      cursor: move;
+      r: 0.07;
+      opacity: 0.9
+    }
+  </style><style id='parqStyle' type='text/css'>
+    path.edge {
+      stroke: black;
+      stroke-width: 0.05;
+      fill: none;
+    }
+  </style>
+</head>
 <body>
   <table>
     <tr>
@@ -192,7 +211,7 @@
           <button id='updateRendering' disabled>⟳</button>
           <button class='help rendering'>?</button>
           <button id='save' class='span2'>Save</button>
-          <button id='load' class='span2'>Load...</button>
+          <button id='load' class='span2'>Load...<div id='saveList' class='tooltip'></div></button>
           <button class='help storage'>?</button>
       </div></td>
       <td>
@@ -216,31 +235,36 @@
     |*               *|
     \*****************/
 
-    var wpDisplay, symmetryElements, latticeElements, helpElements, saveArea,
-      svg, drawing, controls, saves // defined by init
-    var shouldRedraw = false
-    var cmoved = false
-  
-    var liveSave = true
-    var liveDrawing = true
-    var saveConfirm = false
-
-    var nw = 23, nh = 11
-    var border = 30, width = 1200, controlHeight = 150, controlWidth = width/controlHeight
-    var scale = (width - border*2)/(1.5*nw), height = scale*nh + controlHeight + border*3
-    
-    // creates svg path data strings from lists of points
-    const edgeHelper = d3.line()
-
-    const assign = Object.assign  
-
-    var prototiles // defined by restart
+    // d3 selections of relevent elements
+    var svg, drawing, controls, wpDisplay, symmetryElements, latticeElements, 
+      helpElements, saveArea, saveElements, eraseElements // defined by init
     var parqLocs, parqElements, edgeElements // defined by rerender
-    var edgeGenerator // defined by rerender AND reupdate
-    var edgeTfs // defined by many things
-
     var prototileElements, ptEdgeElements, ptCpointElements, ptAnchorElements,
       ptVertexWrappers, ptVertexElements // defined by rerenderControls
+
+    // variables of current deformation
+    var wallpaper         // which symmetry is in use
+    var prototiles        // the endpoints (and middlepoints) of the deformation; defined by restart
+    var edgeGenerator     // interpolates between prototiles; defined by rerender and reupdate
+    var edgeTfs           // calculated from wallpaper.edgeTfs(); defined whenever it needs to be
+    var nw = 23, nh = 11  // width and height of drawing in number of tiles
+    var name = 'parquet'  // save name
+
+    // UI constants for large sections
+    const border = 30, width = 1200, controlHeight = 150, controlWidth = width/controlHeight
+    const scale = (width - border*2)/(1.5*nw), height = scale*nh + controlHeight + border*3
+
+    // UI state flags
+    var shouldRedraw = false  // this > 0 means redraw next frame
+    var cmoved = false        // was the cpoint was moved last frame
+    var liveSave = true       // should the JSON be live-updated
+    var liveDrawing = true    // should the drawing be live-updated
+    var saveConfirm = false   // waiting for confirmation on overwriting save
+    var deleteConfirm = false // waiting for confirmation on deleting save
+    
+    // Utilities that aren't simple function definitions
+    const edgeHelper = d3.line() // creates svg path data strings from lists of points
+    const assign = Object.assign // this is super useful
 
     const tips = {
       general: 'click on left sidebar to choose symmetry, click and drag on blue lines to create control vertices, orange points are draggable too',
@@ -574,16 +598,7 @@
       ]
     ]
 
-    const examples = [
-      {"title":"triangulation","symmetry":"p6","lattice":"hexagonal_c","tiles":[
-        [[[0.8119,0.5313],[0.7036,0.5938],[0.6495,0.625],[0.5954,0.6563],[0.4872,0.7188]]],
-        [[[0.866,0.625],[0.866,0.875],[0.866,1],[0.7577,0.9375],[0.5413,0.8125]]],
-        [[[1.1,0.625],[0.6495,0.875],[0.866,1],[0.6495,1.125],[0.6495,0.625]]]]},
-      {"title":"fish scales", "symmetry":"cm","lattice":"rhombic_b","cpoint":[2,0.5],"tiles":[
-        [[[1.5,0],[1.8866,0.2175]]],
-        [[[0.33,0.4],[1.33,0.1]]]]}
-    ]
-
+    // simple tile class
     function tile(edges) {
       this.anchors = wallpaper.anchors()
       this.edges = edges || Array.from({length: wallpaper.edgeEnds.length}, () => [])
@@ -597,6 +612,16 @@
       }
     }
 
+    const examples = {
+      triangulation: {"name":"triangulation","symmetry":"p6","lattice":"hexagonal_c","tiles":[
+        [[[0.8119,0.5313],[0.7036,0.5938],[0.6495,0.625],[0.5954,0.6563],[0.4872,0.7188]]],
+        [[[0.866,0.625],[0.866,0.875],[0.866,1],[0.7577,0.9375],[0.5413,0.8125]]],
+        [[[1.1,0.625],[0.6495,0.875],[0.866,1],[0.6495,1.125],[0.6495,0.625]]]]},
+      "fish scales": {"name":"fish scales", "symmetry":"cm","lattice":"rhombic_b","cpoint":[2,0.5],"tiles":[
+        [[[1.5,0],[1.8866,0.2175]]],
+        [[[0.33,0.4],[1.33,0.1]]]]}
+    }
+
     /****************\
     |*              *|
     |*  INITIATION  *|
@@ -605,8 +630,6 @@
 
     const cpointDrag = d3.drag().on('start', updateJSON).on('drag', dragCpoint)
     const vertexDrag = d3.drag().on('start', updateJSON).on('drag', dragVertex)
-
-    var wallpaper
 
     init()
 
@@ -619,14 +642,13 @@
       shouldRedraw = false
     }})
 
-    /*************\
-    |*           *|
-    |*  DRAWING  *|
-    |*           *|
-    \*************/
-
-    // initiate
     function init() {
+      initSidebar()
+      initButtons()
+      initSVG()
+    }
+
+    function initSidebar() {
       // symmetry sidebar
       wpDisplay = d3.select('#wpDisplay').datum(wpData)
       symmetryElements = wpDisplay.selectAll('tbody')
@@ -656,6 +678,12 @@
         .classed('wpHint', true)
         .append('code')
         .text(d => d.hint)
+    }
+
+    function initButtons() {
+      saves = localStorage.getItem('deformations')
+      if (saves === null || saves[0] === '[') saves = examples
+      else saves = JSON.parse(saves)
 
       d3.select('#downloadSVG').on('click', downloadSVG)
       d3.select('#loadJSON').on('click', loadJSON)
@@ -665,7 +693,13 @@
       d3.select('#updateRendering').on('click', updateRendering)
       d3.select('#save').on('click', save)
       d3.select('#save').on('mouseout', saveReset)
-      d3.select('#load').on('click', load)
+      d3.select('#load').on('click', function(){ d3.event.whichTooltip = d3.select(this).select('.tooltip') })
+
+      d3.select('#saveList')
+        .on('click', ()=>{d3.event.stopPropagation()})
+        .append('table')
+
+      rerenderSaves()
 
       d3.selectAll('.help') 
         .datum(function(d,i) {let cL = this.classList; return cL[1] == 'help' ? cL[0] : cL[1]})
@@ -678,8 +712,10 @@
       d3.select(document).on('click', tooltipCheck)
 
       saveArea = d3.select('#saveArea')
+    }
 
-      //big container svg elements
+    function initSVG() {
+
       svg = d3.select('#main')
         .style('width', width)
         .style('height', height)
@@ -697,11 +733,13 @@
 
       // draw everything
       restart()
-
-      saves = localStorage.getItem('deformations')
-      if (saves === null) saves = examples
-      else saves = JSON.parse(saves)
     }
+
+    /*************\
+    |*           *|
+    |*  DRAWING  *|
+    |*           *|
+    \*************/
 
     // TODO: add options to this
     function restart() {
@@ -710,6 +748,7 @@
     }
 
     // create everything from scratch
+    // still don't *quite* grok d3's so-called "standard update pattern"
     function rerender() {
       parqLocs = d3.cross(d3.range(nw), d3.range(nh), (a, b) => 
       ({
@@ -839,6 +878,22 @@
       if (liveSave) updateJSON()
     }
 
+    function rerenderSaves() {
+      if (saveElements) saveElements.remove()
+      saveElements = d3.select('#saveList').select('table').selectAll('tr')
+        .data(Object.getOwnPropertyNames(saves))
+        .enter().append('tr')
+      saveElements.append('td').append('a')
+        .text(d => d)
+        .attr('href', '')
+        .on('click', load)
+      saveElements.append('td').append('a')
+        .text('X')
+        .attr('href', '')
+        .on('click', deleteSave)
+        .on('mouseOut', deleteReset)
+    }
+
     /***************\
     |*             *|
     |*  LISTENERS  *|
@@ -891,7 +946,8 @@
     }
 
     function tooltipCheck() {
-      let tooltip = d3.event.whichTooltip, wasAlreadyDisplayed = true
+      let tooltip = d3.event.whichTooltip
+      let wasAlreadyDisplayed = true
       if (tooltip) wasAlreadyDisplayed = tooltip.style('display') == 'block'
       d3.selectAll('.tooltip').style('display', 'none')
       if (!wasAlreadyDisplayed) tooltip.style('display', 'block')
@@ -954,14 +1010,15 @@
       reupdate()
     }
 
-    function save(name='parquet') {
-      if (name == '') name = 'parquet'
+    function save() {
+      if (name === '') name = 'parquet'
       if (saves.hasOwnProperty(name) && !saveConfirm) {
         saveConfirm = true
         this.innerText = 'Replace?'
       } else {
         saves[name] = saveArea.node().value.replace(/ /g, '')
         localStorage.setItem('deformations', JSON.stringify(saves))
+        rerenderSaves()
         saveConfirm = false
         this.innerText = 'Saved!'
       }
@@ -970,8 +1027,21 @@
       saveConfirm = false
       this.innerText = 'Save'
     }
-    function load() {
+    function load(d) {
       
+    }
+    function deleteSave(d) {
+      if (!deleteConfirm) {
+        deleteConfirm = true
+        this.innerText = '?'
+      } else {
+        delete saves[d]
+        rerenderSaves()
+      }
+    }
+    function deleteReset() {
+      deleteConfirm = false
+      this.innerText = 'X'
     }
 
     /***************\
@@ -984,6 +1054,7 @@
       return d3.piecewise(d3.interpolate, prototiles.map(t => t.fullEdges()))
     }
 
+    //TODO: pretty sure D3 has a way to handle this
     function clientToLocal(e, svgEl) {
       let point = svg.node().createSVGPoint()
       point.x = e.clientX; point.y = e.clientY
@@ -1044,7 +1115,7 @@
 
       // arrow function does 1.7320508075688772 -> " 1.7321"
       result = JSON.stringify(
-        {symmetry: symmetry, lattice: lattice.name, cpoint: wallpaper.cpoint, tiles: prototiles.map(t => t.edges)},
+        {name: name, symmetry: symmetry, lattice: lattice.name, cpoint: wallpaper.cpoint, tiles: prototiles.map(t => t.edges)},
         (key, val) => (exists(val) && val.toFixed)? val.toFixed(4).replace(/[0.](?=0*$)/g,' ').replace(/^(?=\d)/, ' ') : val,
         2
       )
