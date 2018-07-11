@@ -98,23 +98,47 @@
       position: relative;
       place-self: center;
     }
+
+    #updateJSON, #updateRendering {position: relative;}
+    #updateJSON::after, #updateRendering::after {
+      content: '';
+      position: absolute;
+      width: 44%;
+      height: 10%;
+      left: calc(28% - 2px);
+      border: 2px solid #333;
+      bottom: 10%;
+    }
+    #updateJSON:disabled::before, #updateRendering:disabled::after {border-color: #999}
+
     #load { position: relative; }
     #load table { width: 100%; }
-    #load td:last-child {/*TODO: Fix this! https://stackoverflow.com/questions/18920542/draw-an-x-in-css/18921065#18921065*/
+    #load td:hover {
+      cursor: pointer;
+    }
+    #load td:first-child {
+      color: #00e;
+      text-decoration: underline;
+    }
+    #load td:last-child {
       position: relative;
-      width: 25px;
-      height: 25px;
+      width: 20px;
+      height: 20px;
     }
     #load td:last-child::after, #load td:last-child::before {
-      width: 80%;
-      height: 3px;
-      border-radius: 3px;
-      top: 11px;
+      width: 16px;
+      height: 4px;
+      border-radius: 2px;
+      top: 9px;
+      left: 3px;
       content: '';
       background-color: black;
+      position: absolute;
     }
     #load td:last-child::after {transform: rotate(45deg);}
     #load td:last-child::before {transform: rotate(-45deg);}
+    #load td.confirm:last-child::after, #load td.confirm:last-child::before {background-color: red}
+
     /* button styles swiped from google */
     button {
       color: #333333;
@@ -206,9 +230,9 @@
           <button id='loadJSON' class='span4'>Load From JSON</button>
           <button class='help JSON'>?</button>
           <button id='lockJSON' class='span3'>Lock JSON</button>
-          <button id='updateJSON'>⟳</button>
+          <button id='updateJSON'>⬇</button>
           <button id='lockRendering' class='span3'>Lock Rendering</button>
-          <button id='updateRendering' disabled>⟳</button>
+          <button id='updateRendering' disabled>⬆</button>
           <button class='help rendering'>?</button>
           <button id='save' class='span2'>Save</button>
           <button id='load' class='span2'>Load...<div id='saveList' class='tooltip'></div></button>
@@ -229,11 +253,11 @@
 
   <script>
 
-    /*****************\
-    |*               *|
-    |*  SCAFFOLDING  *|
-    |*               *|
-    \*****************/
+    //  ████  ████  ███  █████ █████  ███  █     ████  █████ █   █  ████ 
+    // █     █     █   █ █     █     █   █ █     █   █   █   ██  █ █     
+    //  ███  █     █████ ███   ███   █   █ █     █   █   █   █ █ █ █  ██ 
+    //     █ █     █   █ █     █     █   █ █     █   █   █   █  ██ █   █ 
+    // ████   ████ █   █ █     █      ███  █████ ████  █████ █   █  ████ 
 
     // d3 selections of relevent elements
     var svg, drawing, controls, wpDisplay, symmetryElements, latticeElements, 
@@ -272,8 +296,8 @@
       lattices: 'These are the lattices of the tesselation, or how the centers of the tiles are arranged. Some wallpaper groups allow for multiple lattices, and some do not. Since the orientation of the symmetry matters for parquet deformations, many of the group/lattice pairs are included multiple times.',
       mnemonics: 'These are mnemonics to try to show what using the specific variant will look like.',
       download: 'SVG is an image format which can be displayed by any modern browser. It\'s a vector format, which means it stores shapes and positions instead of pixels. If you want a png instead, take a screenshot using the Snipping Tool on Windows and Shift-Command-4 on Mac.',
-      JSON: 'JSON is a data storage format which is used to store your deformation. It\'s displayed just to the right; with a bit of experimentation, it should be pretty clear how it works. You can modify the JSON and then load from it for precision modification. If you want to mess with the prototiles without disturbing your JSON, you can lock it, and click the "⟳" button if you want to update it.',
-      rendering: 'If your computer struggles to keep up whenever you change the prototiles, then it may be a good idea to lock the rendering, and click the "⟳" button when you make an adjustment.',
+      JSON: 'JSON is a data storage format which is used to store your deformation. It\'s displayed just to the right; with a bit of experimentation, it should be pretty clear how it works. You can modify the JSON and then load from it for precision modification. If you want to mess with the prototiles without disturbing your JSON, you can lock it, and click the "⬇" button if you want to update it.',
+      rendering: 'If your computer struggles to keep up whenever you change the prototiles, then it may be a good idea to lock the rendering, and click the "⬆" button when you make an adjustment.',
       storage: 'These buttons save and load the parquet deformations locally in your browser.'
     }
 
@@ -613,28 +637,36 @@
     }
 
     const examples = {
-      triangulation: {"name":"triangulation","symmetry":"p6","lattice":"hexagonal_c","tiles":[
-        [[[0.8119,0.5313],[0.7036,0.5938],[0.6495,0.625],[0.5954,0.6563],[0.4872,0.7188]]],
-        [[[0.866,0.625],[0.866,0.875],[0.866,1],[0.7577,0.9375],[0.5413,0.8125]]],
-        [[[1.1,0.625],[0.6495,0.875],[0.866,1],[0.6495,1.125],[0.6495,0.625]]]]},
-      "fish scales": {"name":"fish scales", "symmetry":"cm","lattice":"rhombic_b","cpoint":[2,0.5],"tiles":[
-        [[[1.5,0],[1.8866,0.2175]]],
-        [[[0.33,0.4],[1.33,0.1]]]]}
+      "example: triangulation": 
+        {"name":"example: triangulation","symmetry":"p6","lattice":"hexagonal_c","tiles":[
+          [[[0.8119,0.5313],[0.7036,0.5938],[0.6495,0.625],[0.5954,0.6563],[0.4872,0.7188]]],
+          [[[0.866,0.625],[0.866,0.875],[0.866,1],[0.7577,0.9375],[0.5413,0.8125]]],
+          [[[1.1,0.625],[0.6495,0.875],[0.866,1],[0.6495,1.125],[0.6495,0.625]]]]},
+      "example: fish scales": 
+        {"name":"example: fish scales", "symmetry":"cm","lattice":"rhombic_b","cpoint":[2,0.5],"tiles":[
+          [[[1.5,0],[1.8866,0.2175]]],
+          [[[0.33,0.4],[1.33,0.1]]]]},
+      "example: order from chaos":
+        {"name":"example: order from chaos","symmetry":"pgg","lattice":"rectangular","cpoint":[1,1],"tiles":[
+          [[[1.71,1.21]],[[1.1,1.1]]], 
+          [[[1.41,1]],[[1.81,1]]],
+          [[[1,1]],[[1.81,1]]]]}
     }
-
-    /****************\
-    |*              *|
-    |*  INITIATION  *|
-    |*              *|
-    \****************/
 
     const cpointDrag = d3.drag().on('start', updateJSON).on('drag', dragCpoint)
     const vertexDrag = d3.drag().on('start', updateJSON).on('drag', dragVertex)
+
+    // █████ █   █ █████ █████ █████  ███  █████ █████  ███  █   █           
+    //   █   ██  █   █     █     █   █   █   █     █   █   █ ██  █           
+    //   █   █ █ █   █     █     █   █████   █     █   █   █ █ █ █           
+    //   █   █  ██   █     █     █   █   █   █     █   █   █ █  ██           
+    // █████ █   █ █████   █   █████ █   █   █   █████  ███  █   █
 
     init()
 
     rerenderControls()
 
+    // updating so many SVG elements is expensive, so it goes in a d3 timer instead of a listener
     d3.interval(function(t) { if (shouldRedraw) {
       if      (shouldRedraw == 3) restart()
       else if (shouldRedraw == 2) rerender()
@@ -642,14 +674,15 @@
       shouldRedraw = false
     }})
 
+    // three guesses what this does
     function init() {
       initSidebar()
       initButtons()
       initSVG()
     }
 
+    // symmetry sidebar
     function initSidebar() {
-      // symmetry sidebar
       wpDisplay = d3.select('#wpDisplay').datum(wpData)
       symmetryElements = wpDisplay.selectAll('tbody')
         .data(d => d).enter().insert('tbody',':last-child')
@@ -680,6 +713,7 @@
         .text(d => d.hint)
     }
 
+    // other non-svg controls
     function initButtons() {
       saves = localStorage.getItem('deformations')
       if (saves === null || saves[0] === '[') saves = examples
@@ -735,11 +769,11 @@
       restart()
     }
 
-    /*************\
-    |*           *|
-    |*  DRAWING  *|
-    |*           *|
-    \*************/
+    // ████  ████   ███  █   █ █████ █   █  ████                             
+    // █   █ █   █ █   █ █   █   █   ██  █ █                                 
+    // █   █ ████  █████ █ █ █   █   █ █ █ █  ██                             
+    // █   █ █   █ █   █ ██ ██   █   █  ██ █   █                             
+    // ████  █   █ █   █ █   █ █████ █   █  ████  
 
     // TODO: add options to this
     function restart() {
@@ -784,11 +818,11 @@
         .attr('d', d => d.data)
     }
 
-    /**************\
-    |*            *|
-    |*  CONTROLS  *|
-    |*            *|
-    \**************/
+    //  ████  ███  █   █ █████ ████   ███  █      ████                       
+    // █     █   █ ██  █   █   █   █ █   █ █     █                           
+    // █     █   █ █ █ █   █   ████  █   █ █      ███                        
+    // █     █   █ █  ██   █   █   █ █   █ █         █                       
+    //  ████  ███  █   █   █   █   █  ███  █████ ████   
 
     function rerenderControls() {
       // "prototile" is the term for, not a tile, exactly, but the shape of a tile
@@ -883,22 +917,19 @@
       saveElements = d3.select('#saveList').select('table').selectAll('tr')
         .data(Object.getOwnPropertyNames(saves))
         .enter().append('tr')
-      saveElements.append('td').append('a')
+      saveElements.append('td')
         .text(d => d)
-        .attr('href', '')
         .on('click', load)
-      saveElements.append('td').append('a')
-        .text('X')
-        .attr('href', '')
+      saveElements.append('td')
         .on('click', deleteSave)
         .on('mouseOut', deleteReset)
     }
 
-    /***************\
-    |*             *|
-    |*  LISTENERS  *|
-    |*             *|
-    \***************/
+    // █     █████  ████ █████ █████ █   █ █████ ████   ████ 
+    // █       █   █       █   █     ██  █ █     █   █ █     
+    // █       █    ███    █   ███   █ █ █ ███   ████   ███  
+    // █       █       █   █   █     █  ██ █     █   █     █ 
+    // █████ █████ ████    █   █████ █   █ █████ █   █ ████  
 
     function dragVertex(d, i, g) {
       d[0] = d3.event.x
@@ -1028,27 +1059,33 @@
       this.innerText = 'Save'
     }
     function load(d) {
-      
+      let textarea = saveArea.node()
+      textarea.select()
+      supportsCommand = document.execCommand('insertText', false, JSON.stringify(saves[d]))
+      if (!supportsCommand) textarea.value = JSON.stringify(saves[d])
+      loadJSON()
     }
     function deleteSave(d) {
       if (!deleteConfirm) {
         deleteConfirm = true
-        this.innerText = '?'
+        this.classList.add('confirm')
       } else {
+        deleteConfirm = false
         delete saves[d]
+        localStorage.setItem('deformations', JSON.stringify(saves))
         rerenderSaves()
       }
     }
     function deleteReset() {
       deleteConfirm = false
-      this.innerText = 'X'
+      this.classList.remove('confirm')
     }
 
-    /***************\
-    |*             *|
-    |*  UTILITIES  *|
-    |*             *|
-    \***************/
+    // █   █ █████ █████ █     █████ █████ █████ █████  ████                 
+    // █   █   █     █   █       █     █     █   █     █                     
+    // █   █   █     █   █       █     █     █   ███    ███                  
+    // █   █   █     █   █       █     █     █   █         █                 
+    // █████   █   █████ █████ █████   █   █████ █████ ████  
 
     function edgeGeneratorFactory() {
       return d3.piecewise(d3.interpolate, prototiles.map(t => t.fullEdges()))
