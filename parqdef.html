@@ -27,6 +27,32 @@
       user-select: text;
       text-align: left;
     }
+    
+    #load { position: relative; }
+    #load table { width: 100%; }
+    #load td:hover {cursor: pointer;}
+    #load td:first-child {
+      color: #00e;
+      text-decoration: underline;
+    }
+    #load td:last-child {
+      position: relative;
+      width: 20px;
+      height: 20px;
+    }
+    #load td:last-child::after, #load td:last-child::before {
+      width: 16px;
+      height: 4px;
+      border-radius: 2px;
+      top: 9px;
+      left: 3px;
+      content: '';
+      background-color: black;
+      position: absolute;
+    }
+    #load td:last-child::after {transform: rotate(45deg);}
+    #load td:last-child::before {transform: rotate(-45deg);}
+    #load td.confirm:last-child::after, #load td.confirm:last-child::before {background-color: red}
 
     #saveArea {
       margin: 10px;
@@ -83,13 +109,20 @@
 
     #buttons {
       display: grid;
-      grid-template: 1fr 1fr 1fr 1fr 1fr / 1fr 1fr 1fr 1fr 25px;
-      grid-gap: 3px;
+      grid-template: 1fr 1fr 1fr 1fr / 42px 42px 42px 42px 30px;
+      grid-row-gap: 3px;
     }
     button.span4 {grid-column-end: span 4;}
-    button.span3 {grid-column-end: span 3;}
     button.span2 {grid-column-end: span 2;}
-    button.help.JSON {grid-row-end: span 2;}
+    button.barright {
+      border-right-width: 0;
+      border-top-right-radius: 0;
+      border-bottom-right-radius: 0;
+    }
+    button.barleft {
+      border-top-left-radius: 0;
+      border-bottom-left-radius: 0;
+    }
     button.help {
       padding: 2px 6px;
       border-radius: 1000px;
@@ -99,53 +132,25 @@
       place-self: center;
     }
 
-    #updateJSON, #updateRendering {position: relative;}
-    #updateJSON::after, #updateRendering::after {
+    #updateJSON, #loadJSON {position: relative;}
+    #updateJSON::before, #loadJSON::before {
+      width: 44%;
+      right: calc(28% - 2px);
       content: '';
       position: absolute;
-      width: 44%;
       height: 10%;
-      left: calc(28% - 2px);
       border: 2px solid #333;
       bottom: 10%;
     }
-    #updateJSON:disabled::before, #updateRendering:disabled::after {border-color: #999}
+    #updateJSON:disabled::after, #updateRendering:disabled::after {border-color: #999}
 
-    #load { position: relative; }
-    #load table { width: 100%; }
-    #load td:hover {
-      cursor: pointer;
-    }
-    #load td:first-child {
-      color: #00e;
-      text-decoration: underline;
-    }
-    #load td:last-child {
-      position: relative;
-      width: 20px;
-      height: 20px;
-    }
-    #load td:last-child::after, #load td:last-child::before {
-      width: 16px;
-      height: 4px;
-      border-radius: 2px;
-      top: 9px;
-      left: 3px;
-      content: '';
-      background-color: black;
-      position: absolute;
-    }
-    #load td:last-child::after {transform: rotate(45deg);}
-    #load td:last-child::before {transform: rotate(-45deg);}
-    #load td.confirm:last-child::after, #load td.confirm:last-child::before {background-color: red}
-
-    /* button styles swiped from google */
+    /* button styles swiped from google and modified */
     button {
       color: #333333;
       background: #f3f3f3;
       border: 1px #dadada solid;
-      padding: 5px 10px;
-      border-radius: 2px;
+      padding: 5px;
+      border-radius: 4px;
       font-weight: bold;
       font-size: 9pt;
       outline: none;
@@ -158,12 +163,17 @@
       color: #222;
       background: #f7f7f7;
     }
-    button:active {
-      box-shadow: inset 1px 1px 1px #dfdfdf;   
-    }
+    button:active {box-shadow: inset 1px 1px 1px #dfdfdf;}
     button:disabled {
       color: #999;
-      background: #fff;
+      background-color: #fff;
+    }
+    button.label {
+      color: #333333;
+      border: none;
+    }
+    button.error, button.error:hover:not(:disabled) {
+      background-color: #faa;
     }
   </style><style id='controlStyle'>
     path.protoedge {
@@ -227,15 +237,17 @@
       <td class='aligntop'><div id='buttons'>
           <button id='downloadSVG' class='span4'>Download SVG</button>
           <button class='help download'>?</button>
-          <button id='loadJSON' class='span4'>Load From JSON</button>
+          <button id='labelJSON' class='label' disabled>JSON</button>
+          <button id='loadJSON' class='barright'>⬆</button>
+          <button id='updateJSON' class='barright barleft'>⬇</button>
+          <button id='lockJSON' class='barleft'>🔓</button>
           <button class='help JSON'>?</button>
-          <button id='lockJSON' class='span3'>Lock JSON</button>
-          <button id='updateJSON'>⬇</button>
-          <button id='lockRendering' class='span3'>Lock Rendering</button>
-          <button id='updateRendering' disabled>⬆</button>
+          <button id='labelRendering' class = 'label span2' disabled>Rendering</button>
+          <button id='updateRendering' disabled class='barright'>⬆</button>
+          <button id='lockRendering' class='barleft'>🔓</button>
           <button class='help rendering'>?</button>
-          <button id='save' class='span2'>Save</button>
-          <button id='load' class='span2'>Load...<div id='saveList' class='tooltip'></div></button>
+          <button id='save' class='span2 barright'>Save</button>
+          <button id='load' class='span2 barleft'>Load...<div id='saveList' class='tooltip'></div></button>
           <button class='help storage'>?</button>
       </div></td>
       <td>
@@ -288,15 +300,24 @@
     
     // Utilities that aren't simple function definitions
     const edgeHelper = d3.line() // creates svg path data strings from lists of points
+      .defined(d => d!==false)   // for future addition of line of 
     const assign = Object.assign // this is super useful
 
     const tips = {
-      general: 'click on left sidebar to choose symmetry, click and drag on blue lines to create control vertices, orange points are draggable too',
+      general: `This is parquet Definitions, a tool for making neat geometric Escherian art.
+        <ul>${''
+          }<li>Click and on blue lines to create vertices (blue points)</li>${''
+          }<li>Drag vertices to change the shape of the tiles</li>${''
+          }<li>Right click vertices to delete them</li>${''
+          }<li>Click on left sidebar to choose a different symmetry; this will reset all vertices</li>${''
+          }<li>Many symmetries have an additional orange point which controls the dimensions of the tiles</li>${''
+          }<li>Control-Z works, although it only operates on the text representation of the tiling</li>${''
+        }</ul>`,
       wallpapers: 'These are the <a href="https://en.wikipedia.org/wiki/Wallpaper_group">wallpaper groups</a>. They determine the symmetry of the resulting tesselation. There are 17 in total; not all of them are present due to technical limitations with the implementation, but there\'s still plenty of variety. Experiment!',
       lattices: 'These are the lattices of the tesselation, or how the centers of the tiles are arranged. Some wallpaper groups allow for multiple lattices, and some do not. Since the orientation of the symmetry matters for parquet deformations, many of the group/lattice pairs are included multiple times.',
       mnemonics: 'These are mnemonics to try to show what using the specific variant will look like.',
       download: 'SVG is an image format which can be displayed by any modern browser. It\'s a vector format, which means it stores shapes and positions instead of pixels. If you want a png instead, take a screenshot using the Snipping Tool on Windows and Shift-Command-4 on Mac.',
-      JSON: 'JSON is a data storage format which is used to store your deformation. It\'s displayed just to the right; with a bit of experimentation, it should be pretty clear how it works. You can modify the JSON and then load from it for precision modification. If you want to mess with the prototiles without disturbing your JSON, you can lock it, and click the "⬇" button if you want to update it.',
+      JSON: '<p>JSON is a data storage format which is used to store your deformation. It\'s displayed just to the right; with a bit of experimentation, it should be pretty clear how it works.</p><p>You can modify the JSON and then load from it with the "⬆" button for precision modification. If you want to mess with the prototiles without disturbing your JSON, you can lock it, and click the "⬇" button if you want to update it.</p>',
       rendering: 'If your computer struggles to keep up whenever you change the prototiles, then it may be a good idea to lock the rendering, and click the "⬆" button when you make an adjustment.',
       storage: 'These buttons save and load the parquet deformations locally in your browser.'
     }
@@ -637,20 +658,20 @@
     }
 
     const examples = {
-      "example: triangulation": 
+      "example: triangulation": JSON.stringify(
         {"name":"example: triangulation","symmetry":"p6","lattice":"hexagonal_c","tiles":[
           [[[0.8119,0.5313],[0.7036,0.5938],[0.6495,0.625],[0.5954,0.6563],[0.4872,0.7188]]],
           [[[0.866,0.625],[0.866,0.875],[0.866,1],[0.7577,0.9375],[0.5413,0.8125]]],
-          [[[1.1,0.625],[0.6495,0.875],[0.866,1],[0.6495,1.125],[0.6495,0.625]]]]},
-      "example: fish scales": 
+          [[[1.1,0.625],[0.6495,0.875],[0.866,1],[0.6495,1.125],[0.6495,0.625]]]]}),
+      "example: fish scales": JSON.stringify(
         {"name":"example: fish scales", "symmetry":"cm","lattice":"rhombic_b","cpoint":[2,0.5],"tiles":[
           [[[1.5,0],[1.8866,0.2175]]],
-          [[[0.33,0.4],[1.33,0.1]]]]},
-      "example: order from chaos":
+          [[[0.33,0.4],[1.33,0.1]]]]}),
+      "example: order from chaos": JSON.stringify(
         {"name":"example: order from chaos","symmetry":"pgg","lattice":"rectangular","cpoint":[1,1],"tiles":[
           [[[1.71,1.21]],[[1.1,1.1]]], 
           [[[1.41,1]],[[1.81,1]]],
-          [[[1,1]],[[1.81,1]]]]}
+          [[[1,1]],[[1.81,1]]]]})
     }
 
     const cpointDrag = d3.drag().on('start', updateJSON).on('drag', dragCpoint)
@@ -664,6 +685,7 @@
 
     init()
 
+    // this is the "most powerful" method; calling it will update everything that isn't "locked"
     rerenderControls()
 
     // updating so many SVG elements is expensive, so it goes in a d3 timer instead of a listener
@@ -716,11 +738,12 @@
     // other non-svg controls
     function initButtons() {
       saves = localStorage.getItem('deformations')
-      if (saves === null || saves[0] === '[') saves = examples
+      if (saves === null || saves[0] === '[' || saves[1] === '}') saves = examples
       else saves = JSON.parse(saves)
 
       d3.select('#downloadSVG').on('click', downloadSVG)
       d3.select('#loadJSON').on('click', loadJSON)
+      d3.select('#loadJSON').on('mouseout', wrongJSONReset)
       d3.select('#lockJSON').on('click', lockJSON)
       d3.select('#updateJSON').on('click', updateJSON)
       d3.select('#lockRendering').on('click', lockRendering)
@@ -830,7 +853,6 @@
       prototileElements = controls.selectAll('g')
         .data(prototiles).enter().append('g')
         .attr('transform', (d,i,a) => `translate(${i*controlWidth/a.length + 0.25} 0.25) scale(0.5)`)
-
 
       // the edges. blue edges are "active" and can be manipulated. black edges are determined by blue edges
       if (ptEdgeElements) ptEdgeElements.remove()
@@ -990,7 +1012,7 @@
       let w = Math.round(gRect.width + 2*border)
       let h = Math.round(gRect.height + 2*border)
       let x = Math.round((gRect.x-border)-svgRect.x)
-      let y = Math.round((gRect.y-border)-svgRect.y); console.log(x,y)
+      let y = Math.round((gRect.y-border)-svgRect.y)
       let prefix = '<?xml version="1.0" standalone="no"?>\n'
       +'<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">\n'
       +`<svg viewBox="${x} ${y} ${w} ${h}" width="${w}" height="${h}" `
@@ -998,25 +1020,35 @@
       let blob = new Blob(
         [prefix, drawing.node().outerHTML.replace(/(\.\d{4})\d*/g, '$1'),
         d3.select('style#parqStyle').node().outerHTML, '\n</svg>'], {type: 'image/svg+xml'})
-      console.log(blob)
       saveAs(blob, 'parquet.svg')
     }
 
     function loadJSON() {
-      deformation = JSON.parse(saveArea.node().value)
-      console.log()
-      wallpaper = new wallpapers[deformation.symmetry][deformation.lattice]()
-      if (wallpaper.cpoint) wallpaper.cpoint = wallpaper.cmove(...deformation.cpoint)
-      prototiles = deformation.tiles.map(t => new tile(t))
-      rerenderControls()
+      try {
+        deformation = JSON.parse(saveArea.node().value)
+        name = deformation.name || 'parquet'
+        wallpaper = new wallpapers[deformation.symmetry][deformation.lattice]()
+        if (wallpaper.cpoint) wallpaper.cpoint = wallpaper.cmove(...deformation.cpoint)
+        prototiles = deformation.tiles.map(t => new tile(t))
+        let livingSave = liveSave
+        liveSave = false
+        rerenderControls()
+        liveSave = livingSave
+        wrongJSONReset.bind(this)()
+      } catch (e) {
+        this.classList.add('error')
+      }
+    }
+    function wrongJSONReset() {
+      this.classList.remove('error')
     }
     function lockJSON() {
       if (liveSave) {
         liveSave = false
-        this.innerText = 'Unlock JSON'
+        this.innerText = '🔒'
       } else {
         liveSave = true
-        this.innerText = 'Lock JSON'
+        this.innerText = '🔓'
       }
     }
     function updateJSON(t) {
@@ -1029,12 +1061,12 @@
     function lockRendering() {
       if (liveDrawing) {
         liveDrawing = false
-        this.innerText = "Unlock Rendering"
-        this.nextElementSibling.removeAttribute('disabled')
+        this.innerText = "🔒"
+        this.previousElementSibling.removeAttribute('disabled')
       } else {
         liveDrawing = true
-        this.innerText = "Lock Rendering"
-        this.nextElementSibling.setAttribute('disabled', '')
+        this.innerText = "🔓"
+        this.previousElementSibling.setAttribute('disabled', '')
       }
     }
     function updateRendering() {
@@ -1061,8 +1093,8 @@
     function load(d) {
       let textarea = saveArea.node()
       textarea.select()
-      supportsCommand = document.execCommand('insertText', false, JSON.stringify(saves[d]))
-      if (!supportsCommand) textarea.value = JSON.stringify(saves[d])
+      supportsCommand = document.execCommand('insertText', false, saves[d])
+      if (!supportsCommand) textarea.value = saves[d]
       loadJSON()
     }
     function deleteSave(d) {
