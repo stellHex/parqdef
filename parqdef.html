@@ -664,14 +664,19 @@
           [[[0.866,0.625],[0.866,0.875],[0.866,1],[0.7577,0.9375],[0.5413,0.8125]]],
           [[[1.1,0.625],[0.6495,0.875],[0.866,1],[0.6495,1.125],[0.6495,0.625]]]]}),
       "example: fish scales": JSON.stringify(
-        {"name":"example: fish scales", "symmetry":"cm","lattice":"rhombic_b","cpoint":[2,0.5],"tiles":[
+        {"name":"example: fish scales","symmetry":"cm","lattice":"rhombic_b","cpoint":[2,0.5],"tiles":[
           [[[1.5,0],[1.8866,0.2175]]],
           [[[0.33,0.4],[1.33,0.1]]]]}),
-      "example: order from chaos": JSON.stringify(
-        {"name":"example: order from chaos","symmetry":"pgg","lattice":"rectangular","cpoint":[1,1],"tiles":[
-          [[[1.71,1.21]],[[1.1,1.1]]], 
-          [[[1.41,1]],[[1.81,1]]],
-          [[[1,1]],[[1.81,1]]]]})
+      "example: rotary saw": JSON.stringify(
+        {"name":"example: rotary saw","symmetry":"p6","lattice":"hexagonal_a","tiles":[
+          [[[1.299,0.5],[1.1547,0.75]]],
+          [[[0.866,0.5],[0.866,0.75]]],
+          [[[0.433,0.5],[0.5773,0.747]]]]}),
+      "example: jungle leaves": JSON.stringify({
+        "name": "example: jungle leaves", "symmetry": "p3", "lattice": "hexagonal_a",
+        "tiles": [
+          [[[1.299,0.5],[1.299,1],[0.866,0.25]]],
+          [[[0.866,0.25],[1.299,0.50],[0.866,0.75]]]]}),
     }
 
     const cpointDrag = d3.drag().on('start', updateJSON).on('drag', dragCpoint)
