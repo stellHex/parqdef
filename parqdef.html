@@ -329,7 +329,7 @@
       download: 'SVG is an image format which can be displayed by any modern browser. It\'s a vector format, which means it stores shapes and positions instead of pixels. If you want a png instead, take a screenshot using the Snipping Tool on Windows and Shift-Command-4 on Mac.',
       JSON: '<p>JSON is a data storage format which is used to store your deformation. If you\'re not familiar, it\'s pretty simple: numbers go in verbatim, text goes in "quotes", lists go in ["square", "brackets"], and objects with named properties go in {"curly":"brackets"}.</p><p>You can modify the JSON and then load from it with the "⬆" button for precision modification. If you want to mess with the prototiles without disturbing your JSON, you can lock it, and click the "⬇" button if you want to update it.</p>',
       rendering: 'If your computer struggles to keep up whenever you change the prototiles, then it may be a good idea to lock the rendering, and click the "⬆" button when you adjust them.',
-      storage: 'These buttons save and load parquet deformations locally in your browser.'
+      storage: 'These buttons save and load parquet deformations locally in your browser. Use the "name" field of the JSON in order to save different patterns.'
     }
 
     const rt3 = Math.sqrt(3)
@@ -1089,6 +1089,7 @@
     }
 
     function save() {
+      loadJSON()
       if (name === '') name = 'parquet'
       if (saves.hasOwnProperty(name) && !saveConfirm) {
         saveConfirm = true
