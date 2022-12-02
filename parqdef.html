@@ -137,9 +137,7 @@
       position: relative;
       place-self: center;
     }
-    button.help.general {
-      position: relative;
-    }
+    button.help.general { position: relative; }
 
     #updateJSON, #loadJSON {position: relative;}
     #updateJSON::before, #loadJSON::before {
@@ -197,13 +195,13 @@
 
     circle.anchor {
       fill: black;
-      r: 0.06;
+      r: 0.06px;
     }
     circle.cpoint {
       stroke-width: 0.025;
       stroke: black;
       fill: gray;
-      r: 0.07;
+      r: 0.07px;
     }
     circle.cpoint.active {
       stroke: #c00;
@@ -214,7 +212,7 @@
       stroke: #00a;
       fill: #88f;
       cursor: move;
-      r: 0.07;
+      r: 0.07px;
       opacity: 0.9
     }
   </style><style id='parqStyle' type='text/css'>
@@ -789,8 +787,8 @@
     function initSVG() {
 
       svg = d3.select('#main')
-        .style('width', width)
-        .style('height', height)
+        .style('width', width + 'px')
+        .style('height', height + 'px')
       drawing = d3.select('#drawing')
         .attr('transform', `translate(${border} ${border}) scale(${scale})`)
       controls = d3.select('#controls')
